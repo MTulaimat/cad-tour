@@ -27,6 +27,8 @@ export interface Environment {
   /** Sky and distant city, used as scene.background (rotated by `rotation`). */
   backplate: Texture;
   sun: SunInfo;
+  /** Rebuilds the PMREM from the kept HDR (after a WebGL context restore). */
+  regenerate(renderer: WebGLRenderer): Texture;
   dispose(): void;
 }
 
@@ -64,8 +66,7 @@ export async function loadEnvironment(
   ]);
   hdr.mapping = EquirectangularReflectionMapping;
   const cubeSize = Math.max(16, Math.round(hdr.image.width / 4));
-  const target = pmrem.fromEquirectangular(hdr);
-  hdr.dispose();
+  let target = pmrem.fromEquirectangular(hdr);
   pmrem.dispose();
 
   backplate.mapping = EquirectangularReflectionMapping;
@@ -77,7 +78,7 @@ export async function loadEnvironment(
 
   const d = Array.isArray(sunJson?.direction) ? new Vector3(...(sunJson.direction as [number, number, number])) : new Vector3(0.55, 0.62, 0.56);
   d.applyAxisAngle(new Vector3(0, 1, 0), SKY_ROTATION);
-  return {
+  const env: Environment = {
     envMap: target.texture,
     rotation: SKY_ROTATION,
     cubeSize,
@@ -87,9 +88,20 @@ export async function loadEnvironment(
       intensity: typeof sunJson?.suggestedIntensity === 'number' ? sunJson.suggestedIntensity : 4.9,
       color: typeof sunJson?.color === 'string' ? sunJson.color : '#fff6ea',
     },
+    regenerate(r: WebGLRenderer) {
+      const g = new PMREMGenerator(r);
+      target.dispose();
+      hdr.needsUpdate = true;
+      target = g.fromEquirectangular(hdr);
+      g.dispose();
+      env.envMap = target.texture;
+      return target.texture;
+    },
     dispose() {
       target.dispose();
+      hdr.dispose();
       backplate.dispose();
     },
   };
+  return env;
 }

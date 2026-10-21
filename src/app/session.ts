@@ -8,7 +8,7 @@ import { firstPersonPose, PITCH_LIMIT, type CameraPose } from '../controls/first
 import { ThirdPersonCamera } from '../controls/thirdPerson';
 import { ModeTransition } from '../controls/transition';
 import type { InputState } from '../controls/input';
-import type { DoorObject } from '../geometry/merge';
+import type { DoorObject, FloorObjects } from '../geometry/merge';
 import { floorSpawn, roomAt, startSpawn, type Spawn } from '../plan/navigation';
 import type { Tour } from './tour';
 
@@ -40,6 +40,7 @@ export class TourSession {
   readonly transition = new ModeTransition();
   private third = new ThirdPersonCamera();
   private doorObjects: DoorObject[];
+  private colliders: Mesh[] = [];
   private acc = 0;
   private room = '';
   private floor = -1;
@@ -66,18 +67,26 @@ export class TourSession {
     tour.scene.add(this.avatar.root);
     tour.probeHidden = [this.avatar.root];
     this.avatar.root.visible = false;
-    const colliders: Mesh[] = [];
-    for (const f of tour.floors) {
-      if (!f) continue;
-      for (const group of [f.objects.shell, f.objects.furniture]) {
-        for (const c of group.children) {
-          const m = c as Mesh;
-          if (m.isMesh && m.userData.materialKey !== 'rug') colliders.push(m);
-        }
+    for (const f of tour.floors) if (f) this.addColliders(f.objects);
+    this.third.setColliders(this.colliders);
+    this.update(0);
+  }
+
+  private addColliders(objects: FloorObjects): void {
+    for (const group of [objects.shell, objects.furniture]) {
+      for (const c of group.children) {
+        const m = c as Mesh;
+        if (m.isMesh && m.userData.materialKey !== 'rug' && m.userData.materialKey !== 'glass') this.colliders.push(m);
       }
     }
-    this.third.setColliders(colliders);
-    this.update(0);
+  }
+
+  /** A floor finished building after the tour started: its doors and camera colliders join in. */
+  addFloor(objects: FloorObjects): void {
+    this.doorObjects.push(...objects.doors);
+    this.doors.add(objects.doors.map((d) => d.def));
+    this.addColliders(objects);
+    this.third.setColliders(this.colliders);
   }
 
   get mode(): 'first' | 'third' {

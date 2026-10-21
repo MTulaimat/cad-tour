@@ -616,7 +616,7 @@ p {
 
 .touch-hint {
   position: absolute;
-  bottom: calc(var(--edge) + var(--safe-b) + 80px);
+  top: 58%;
   font-size: 0.875rem;
   color: var(--fg-dim);
   pointer-events: none;
@@ -625,11 +625,13 @@ p {
 }
 
 .touch-hint.left {
-  left: calc(var(--edge) + var(--safe-l) + 8px);
+  left: 25%;
+  transform: translateX(-50%);
 }
 
 .touch-hint.right {
-  right: calc(var(--edge) + var(--safe-r) + 8px);
+  left: 75%;
+  transform: translateX(-50%);
 }
 
 .touch-only {

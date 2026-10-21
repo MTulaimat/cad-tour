@@ -1,14 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-    <meta name="theme-color" content="#1b1d21" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#15171b" />
+    <meta name="color-scheme" content="dark" />
     <meta name="description" content="Walk through an apartment in 3D, or open your own DXF floor plan." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CAD Tour" />
+    <link rel="icon" href="/cad-tour/icons/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/cad-tour/icons/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/cad-tour/icons/apple-touch-icon.png" />
     <title>CAD Tour</title>
   </head>
   <body>
     <div id="app"></div>
+    <noscript>CAD Tour needs JavaScript and WebGL 2 to show the 3D tour.</noscript>
     <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>

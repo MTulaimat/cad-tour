@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+// The e2e suite runs against a test-mode build (it exposes window.__tour for state checks).
+const PORT = 4174;
 const BASE = `http://localhost:${PORT}/cad-tour/`;
 
 // Headless Chromium needs a software GL path for WebGL2.
@@ -23,10 +24,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npx vite preview --port ${PORT} --strictPort`,
+    command: 'npm run build:test && npm run preview:test',
     url: BASE,
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 300_000,
   },
   projects: [
     {

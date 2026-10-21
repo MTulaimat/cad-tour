@@ -11,9 +11,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:test": "vite build --mode test --outDir dist-test",
+    "preview:test": "vite preview --outDir dist-test --port 4174 --strictPort",
+    "budget": "node scripts/check-budget.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/noto-sans-arabic": "^5.3.0",
     "dxf-parser": "1.1.2",
     "n8ao": "2.0.1",
     "postprocessing": "6.39.5",

@@ -15,6 +15,14 @@ import {
 import type { FloorPlan } from '../data/schema';
 import { buildExteriorGeometry, buildFloorGeometry, type FloorBuild } from '../geometry';
 import { disposeGroup, floorObjects, meshesFor, type FloorObjects } from '../geometry/merge';
+
+/** Resolves in the next idle slot (or soon, where requestIdleCallback is missing). */
+const idle = () =>
+  new Promise<void>((r) => {
+    const ric = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+    if (ric) ric(() => r(), { timeout: 120 });
+    else setTimeout(r, 16);
+  });
 import { MaterialLibrary } from '../materials/library';
 import { applyTextureSets, disposeTextureSets, loadManifest, loadTextureSets, usedSets, type TextureSet, type TextureSetInfo } from '../materials/textures';
 import { loadEnvironment, type Environment } from '../lighting/environment';
@@ -78,6 +86,8 @@ export class Tour {
   private capture: ProbeCapture | null = null;
   private currentFloor = -1;
   private heroLoaded = false;
+  private pending: number[] = [];
+  private loadToken = 0;
   private width = 1;
   private height = 1;
   private clock = new Clock();
@@ -109,9 +119,13 @@ export class Tour {
     return this.currentFloor;
   }
 
-  /** Builds a plan: lower floor first, then the rest, then lighting and probes. */
+  /**
+   * Builds a plan: the lowest floor first (with lighting and probes), so the tour can start;
+   * the other floors follow in idle time through `buildRemaining`.
+   */
   async load(plan: FloorPlan, onProgress: LoadProgress = () => {}): Promise<void> {
     this.unload();
+    const token = ++this.loadToken;
     this.plan = plan;
     const cfg = this.config;
     onProgress(0.02, 'Loading environment');
@@ -132,15 +146,13 @@ export class Tour {
       }
     })();
 
-    // Geometry builds while the downloads run.
-    const builds: FloorBuild[] = [];
+    // The lowest floor's geometry builds while the downloads run.
     const order = plan.floors.map((f, i) => ({ i, e: f.elevation })).sort((a, b) => a.e - b.e);
-    for (const { i } of order) {
-      builds[i] = buildFloorGeometry(plan, i);
-      await new Promise((r) => setTimeout(r, 0));
-    }
+    const first = order[0].i;
+    const firstBuild = buildFloorGeometry(plan, first);
 
     const [env] = await Promise.all([envP, texP]);
+    if (token !== this.loadToken) return;
     this.env = env;
     this.scene.environment = env.envMap;
     this.scene.environmentIntensity = 1.0;
@@ -154,37 +166,14 @@ export class Tour {
     this.sun.light.color.set(env.sun.color);
     onProgress(0.75, 'Building rooms');
 
-    for (const { i } of order) {
-      const floor = plan.floors[i];
-      const lib = new MaterialLibrary();
-      const probes = createProbeUniforms();
-      const objects = floorObjects(builds[i], lib.get);
-      const rooms = cfg.probes ? probeRooms(floor) : [];
-      // Tag every triangle with the room it faces, then patch the floor's materials.
-      objects.root.traverse((o) => {
-        const m = o as Mesh;
-        if (!m.isMesh) return;
-        if (m.parent === objects.shell || m.parent === objects.furniture) assignProbeSlots(m.geometry, rooms, floor);
-      });
-      for (const d of objects.doors) {
-        const room = rooms.find((r) => pointInPolygon(d.def.center, r.polygon)) ?? rooms[0];
-        for (const c of d.group.children) setProbeSlot((c as Mesh).geometry, room ? room.slot : 0);
-      }
-      applyTextureSets(lib, this.textures);
-      this.tuneGlass(lib);
-      for (const [, mat] of lib.all()) patchMaterialForProbes(mat, probes);
-      this.scene.add(objects.root);
-      const bounds = new Box3().setFromObject(objects.shell);
-      this.floors[i] = { objects, lib, probes, rooms, bounds };
-    }
+    this.addFloor(plan, first, firstBuild);
 
     this.exterior = meshesFor(buildExteriorGeometry(plan, GROUND_DEPTH), this.exteriorLib.get, 'exterior');
     applyTextureSets(this.exteriorLib, this.textures);
     this.scene.add(this.exterior);
-    const all = new Box3();
-    for (const f of this.floors) if (f) all.union(f.bounds);
-    const center = all.getCenter(new Vector3());
-    const size = all.getSize(new Vector3());
+    const fb = this.floors[first].bounds;
+    const center = fb.getCenter(new Vector3());
+    const size = fb.getSize(new Vector3());
     this.context = buildGround(
       {
         groundY: plan.floors.reduce((m, f) => Math.min(m, f.elevation), 0) - GROUND_DEPTH,
@@ -202,12 +191,61 @@ export class Tour {
     this.lights?.dispose();
     this.lights = new InteriorLights(cfg.pointLights, cfg.rectLights);
     this.scene.add(this.lights.group);
-    this.setFloor(order[0].i, true);
+    this.setFloor(first, true);
 
     onProgress(0.9, 'Lighting rooms');
     await new Promise((r) => setTimeout(r, 0));
     this.captureProbes();
+    this.pending = order.slice(1).map((o) => o.i);
     onProgress(1, 'Ready');
+  }
+
+  /** Builds the floors that `load` deferred, one per idle slot, then relights every room. */
+  async buildRemaining(onAdded: (objects: FloorObjects) => void = () => {}): Promise<void> {
+    const token = this.loadToken;
+    const plan = this.plan;
+    if (!plan) return;
+    while (this.pending.length > 0) {
+      await idle();
+      if (token !== this.loadToken) return;
+      const i = this.pending.shift()!;
+      const build = buildFloorGeometry(plan, i);
+      await idle();
+      if (token !== this.loadToken) return;
+      onAdded(this.addFloor(plan, i, build));
+    }
+    // Probes again, now that stairwells see the floors above and below.
+    this.setFloor(this.currentFloor, true);
+    this.captureProbes();
+  }
+
+  get loadingFloors(): boolean {
+    return this.pending.length > 0;
+  }
+
+  private addFloor(plan: FloorPlan, i: number, build: FloorBuild): FloorObjects {
+    const floor = plan.floors[i];
+    const lib = new MaterialLibrary();
+    const probes = createProbeUniforms();
+    const objects = floorObjects(build, lib.get);
+    const rooms = this.config.probes ? probeRooms(floor) : [];
+    // Tag every triangle with the room it faces, then patch the floor's materials.
+    objects.root.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      if (m.parent === objects.shell || m.parent === objects.furniture) assignProbeSlots(m.geometry, rooms, floor);
+    });
+    for (const d of objects.doors) {
+      const room = rooms.find((r) => pointInPolygon(d.def.center, r.polygon)) ?? rooms[0];
+      for (const c of d.group.children) setProbeSlot((c as Mesh).geometry, room ? room.slot : 0);
+    }
+    applyTextureSets(lib, this.textures);
+    this.tuneGlass(lib);
+    for (const [, mat] of lib.all()) patchMaterialForProbes(mat, probes);
+    this.scene.add(objects.root);
+    const bounds = new Box3().setFromObject(objects.shell);
+    this.floors[i] = { objects, lib, probes, rooms, bounds };
+    return objects;
   }
 
   /**
@@ -248,6 +286,17 @@ export class Tour {
       glass.depthWrite = false;
     }
     glass.needsUpdate = true;
+  }
+
+  /** After a WebGL context restore: rebuild the environment, post buffers and probes. */
+  async restoreContext(): Promise<void> {
+    if (this.env) {
+      this.scene.environment = this.env.regenerate(this.renderer);
+      this.env.backplate.needsUpdate = true;
+    }
+    this.post.rebuild(this.config);
+    this.applySize();
+    this.captureProbes();
   }
 
   /** Re-captures every floor's probes (after loading, a tier change or a context restore). */
@@ -397,6 +446,8 @@ export class Tour {
     this.capture?.dispose();
     this.capture = null;
     this.currentFloor = -1;
+    this.pending = [];
+    this.loadToken++;
     this.plan = null;
   }
 

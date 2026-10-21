@@ -62,8 +62,8 @@ export class Hud {
 
     this.floorSeg = el('div', { class: 'seg glass touch-only', role: 'group', 'aria-label': 'Floor', 'data-testid': 'floor-switch' });
 
-    const left = el('div', { class: 'touch-hint left', 'aria-hidden': 'true' }, ['Drag here to move']);
-    const right = el('div', { class: 'touch-hint right', 'aria-hidden': 'true' }, ['Drag here to look']);
+    const left = el('div', { class: 'touch-hint left touch-only', 'aria-hidden': 'true' }, ['Drag here to move']);
+    const right = el('div', { class: 'touch-hint right touch-only', 'aria-hidden': 'true' }, ['Drag here to look']);
     this.hints = [left, right];
 
     this.root = el('div', { class: 'hud', 'data-testid': 'hud', hidden: true }, [

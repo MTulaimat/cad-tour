@@ -27,11 +27,19 @@ const ease = (t: number) => t * t * (3 - 2 * t);
  * would trap the player against a wall, the leaf waits instead.
  */
 export class DoorController {
-  readonly doors: DoorState[];
+  readonly doors: DoorState[] = [];
   private fixed: Segment[] = [];
 
-  constructor(defs: DoorLeafDef[], elevationOf: (floorId: string) => number) {
-    this.doors = defs.map((def) => ({ def, t: 0, target: 0, clearTime: 0, amount: 0 }));
+  constructor(
+    defs: DoorLeafDef[],
+    private elevationOf: (floorId: string) => number,
+  ) {
+    this.add(defs);
+  }
+
+  add(defs: DoorLeafDef[]): void {
+    const elevationOf = this.elevationOf;
+    this.doors.push(...defs.map((def) => ({ def, t: 0, target: 0, clearTime: 0, amount: 0 })));
     // Sliding doors: the fixed glass half is a permanent barrier.
     for (const def of defs) {
       if (def.kind !== 'sliding') continue;

@@ -5,6 +5,8 @@ export interface KeyboardMouseHandlers {
   toggleHelp(): void;
   toggleMinimap(): void;
   toggleMenu(): void;
+  /** Whether the mouse is currently captured (Esc first releases it, then opens the menu). */
+  isLocked(): boolean;
   /** Called when pointer lock is lost (Esc), so the UI can show a resume prompt. */
   pointerLockChanged(locked: boolean): void;
 }
@@ -67,7 +69,8 @@ export class KeyboardMouse {
       return;
     }
     if (!down || e.repeat) return;
-    if (e.code === 'KeyV') this.handlers.toggleMode();
+    if (e.code === 'Escape' && !this.handlers.isLocked()) this.handlers.toggleMenu();
+    else if (e.code === 'KeyV') this.handlers.toggleMode();
     else if (e.code === 'KeyH') this.handlers.toggleHelp();
     else if (e.code === 'KeyM') this.handlers.toggleMinimap();
   }

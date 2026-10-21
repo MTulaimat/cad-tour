@@ -314,13 +314,21 @@ function drawFloor(g: CanvasRenderingContext2D, plan: FloorPlan, floor: Floor, p
     g.font = `600 ${size}px Inter, "Noto Sans Arabic", system-ui, sans-serif`;
     g.direction = hasArabic(r.name) ? 'rtl' : 'ltr';
     const words = r.name.split(' ');
-    const maxW = Math.sqrt(area) * scale * 0.9;
+    const rb = bounds(r.polygon);
+    const maxW = (rb.maxX - rb.minX) * scale * 0.86;
     let lines = [r.name];
     if (g.measureText(r.name).width > maxW && words.length > 1) {
       const mid = Math.ceil(words.length / 2);
       lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
     }
-    lines.forEach((line, i) => g.fillText(line, x, y + (i - (lines.length - 1) / 2) * size * 1.15));
+    // Shrink to fit the room's width, down to a legible minimum.
+    const widest = Math.max(...lines.map((l) => g.measureText(l).width));
+    let fs = size;
+    if (widest > maxW) {
+      fs = Math.max(8.5 * k, size * (maxW / widest));
+      g.font = `600 ${fs}px Inter, "Noto Sans Arabic", system-ui, sans-serif`;
+    }
+    lines.forEach((line, i) => g.fillText(line, x, y + (i - (lines.length - 1) / 2) * fs * 1.15));
   }
   g.direction = 'ltr';
 }
