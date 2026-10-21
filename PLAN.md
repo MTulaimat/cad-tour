@@ -393,7 +393,7 @@ README must cover: controls (desktop and touch), DXF import (how to prepare a DX
 | Milestone | Status | Commit | Notes |
 |---|---|---|---|
 | M0 Scaffold and hosting | done | 71ab5a8 | Public repo MTulaimat/cad-tour created, Pages source set to GitHub Actions, workflow runs unit tests then builds and deploys. Placeholder confirmed live at https://mtulaimat.github.io/cad-tour/ |
-| M1 Data layer | not started | | |
+| M1 Data layer | done | see git log "M1" | `schema.ts` (P1 flights and landings), `mock.ts` (9.6 x 5.8 m footprint, two levels, 112 m2 of rooms including the 6 m2 balcony, straight 17-riser stair rising west along the south wall), `loader.ts`, `validate.ts` + `planJson.ts` (wrapped export, bare import, path-tagged errors). 14 unit tests: validation, rooms, areas, openings fit their walls, stair rise, furniture clear of walls, door swings clear of furniture, JSON round trip. |
 | M2 Geometry | not started | | |
 | M3 Look | not started | | |
 | M4 Controls, collision, cameras | not started | | |
@@ -406,3 +406,8 @@ README must cover: controls (desktop and touch), DXF import (how to prepare a DX
 - **A1. Git worktree.** The build session runs as a background job whose edit guard requires an isolated git worktree. The project folder got `git init` and a first commit (this file), and the code is built in the linked worktree `.claude/worktrees/build` on branch `build` (gitignored). Every milestone is pushed with `git push origin build:main`, so `main` on GitHub (and the Pages site) is exactly as planned; the project folder's own `main` checkout is fast-forwarded to `origin/main` at the end.
 - **A2. Toolchain versions.** Latest stable at build time, pinned exactly: three 0.186.1, postprocessing 6.39.5, n8ao 2.0.1, three-mesh-bvh 0.9.16, Vite 8.3.5, vite-plugin-pwa 2.0.0, Vitest 5.0.5, Playwright 1.64.1, TypeScript 7.0.2 (the native compiler), dxf-parser 1.1.2.
 - **A3. Pages workflow runs the unit tests** before building, so a red test never deploys.
+- **A4. Schema shape.** Walls, openings, rooms, furniture and railings are nested per floor; stairs sit at plan level because they join two floors. A wall's centerline is a point list (two points for start/end, more for a polyline), and openings give their center as an offset along it.
+- **A5. Door swing encoding.** `swing = { hinge: 'start' | 'end', side: 'left' | 'right' }`, relative to the wall direction at the opening. This states the brief's "left/right, in/out" without needing to decide which room is "inside" for interior doors. Doors also carry `style: 'hinged' | 'sliding-glass' | 'passage'`; the balcony door is a 2.0 m sliding glass door.
+- **A6. Room polygons follow wall centerlines** (as DXF room detection produces them), so room areas are gross areas. Rooms have `outdoor: true` for the balcony (no ceiling, exterior wall finish).
+- **A7. Explicit railings.** `Floor.railings` holds balcony railings (and any other guard); stairwell guards are derived from the stair outline at build time so DXF imports get them for free.
+- **A8. Demo layout specifics.** The stair climbs west along the south wall from the living room to the upper landing; the space under its high end is closed off (no storage room, per Q14). Entrance door on the south wall of the hall, hall to living through a door, kitchen open to the living room (two room polygons, no wall). Upstairs: landing with the stairwell, bedroom 2 and bathroom off the landing, bedroom 1 (main, about 20 m2) across the east side.
