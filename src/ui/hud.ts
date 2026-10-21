@@ -37,7 +37,8 @@ export class Hud {
 
   constructor(private h: HudHandlers) {
     this.minimap = new Minimap((i) => h.goToFloor(i));
-    this.roomEl = el('span', { class: 'room', 'data-testid': 'room-name' });
+    // dir=auto: imported Arabic room names read right to left.
+    this.roomEl = el('span', { class: 'room', 'data-testid': 'room-name', dir: 'auto' });
     this.floorEl = el('span', { class: 'floor', 'data-testid': 'floor-name' });
     this.label = el('div', { class: 'room-label glass', role: 'status', 'aria-live': 'polite' }, [this.roomEl, this.floorEl]);
 
