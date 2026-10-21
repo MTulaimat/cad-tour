@@ -59,6 +59,9 @@ export class App {
   private probeDone = false;
   private savedState: PlayerState | null = null;
   private pointerLocked = false;
+  private updates: import('./pwa').AppUpdates | null = null;
+  /** The start screen was used since it last showed (an update then waits for the next time). */
+  private startTouched = false;
 
   constructor(root: HTMLElement) {
     this.canvas = el('canvas', { 'aria-label': '3D view of the apartment', tabindex: '0', 'data-testid': 'canvas' });
@@ -196,6 +199,13 @@ export class App {
   }
 
   async init(): Promise<void> {
+    // No service worker in the test build (it would serve a stale shell between runs).
+    if (import.meta.env.MODE !== 'test' && !import.meta.env.DEV) {
+      const { AppUpdates } = await import('./pwa');
+      // Only on an untouched start screen: never under an open file picker or a file being read.
+      this.updates = new AppUpdates(() => !this.start.root.hidden && !this.started && !this.startTouched && document.visibilityState === 'visible');
+      this.start.root.addEventListener('pointerdown', () => (this.startTouched = true), { capture: true });
+    }
     this.lastPlan = await loadLastPlan();
     this.start.setContinue(this.lastPlan ? this.lastPlan.name : null);
     const params = new URLSearchParams(location.search);
@@ -267,6 +277,8 @@ export class App {
     this.overlay.show(false);
     this.hud.show(false);
     this.importFlow.hide();
+    this.startTouched = false;
+    this.updates?.applyIfPending();
   }
 
   private fail(title: string, body: string, details: string[] = []): void {
@@ -287,6 +299,7 @@ export class App {
   }
 
   async openFile(file: File): Promise<void> {
+    this.startTouched = true;
     const kind = await classifyFile(file);
     if (kind === 'dwg') return this.fail("Can't open this file", DWG_MESSAGE);
     if (kind === 'binary-dxf') return this.fail("Can't open this file", BINARY_DXF_MESSAGE);
@@ -332,7 +345,7 @@ export class App {
       });
       this.session.paused = true;
       const session = this.session;
-      void this.tour.buildRemaining((objects) => session.addFloor(objects));
+      this.tour.buildRemaining((objects) => session.addFloor(objects)).catch((e) => console.error('Building the other floors failed', e));
       this.hud.setPlan(plan);
       this.hud.setFloor(this.session.getState().floor);
       this.hud.setRoom(this.session.roomName);
@@ -438,10 +451,15 @@ export class App {
   /** Q7: fade out, move to the stair landing on that floor, fade in. */
   private goToFloor(index: number): void {
     if (!this.session) return;
+    const session = this.session;
     this.fade.classList.add('on');
+    // A floor still being built in the background is waited for behind the fade.
+    const ready = this.tour.whenFloorBuilt(index);
     setTimeout(() => {
-      this.session?.teleportToFloor(index);
-      setTimeout(() => this.fade.classList.remove('on'), 60);
+      void ready.then(() => {
+        if (this.session === session) session.teleportToFloor(index);
+        setTimeout(() => this.fade.classList.remove('on'), 60);
+      });
     }, 300);
   }
 
@@ -505,15 +523,18 @@ export class App {
 
   private frame(dt: number): void {
     this.session?.update(dt);
-    if (this.session) {
-      const s = this.session.body;
-      this.hud.minimap.setPlayer(s.position, s.yaw);
-    }
+    this.syncMinimap();
     this.probeFrame(dt);
     if (this.debugEl) {
       const st = this.tour.stats();
       this.debugEl.textContent = `${Math.round(1000 / Math.max(1, st.frameMs))} fps  ${st.frameMs.toFixed(1)} ms\nscale ${st.scale.toFixed(2)}  dpr ${this.tour.pixelRatio.toFixed(2)}\ncalls ${st.calls}  tris ${(st.triangles / 1000).toFixed(0)}k\ntier ${this.tour.config.tier}${this.settings.quality === 'auto' ? ' (auto)' : ''}`;
     }
+  }
+
+  private syncMinimap(): void {
+    if (!this.session) return;
+    const s = this.session.body;
+    this.hud.minimap.setPlayer(s.position, s.yaw);
   }
 
   /** Test hook for Playwright; only in dev and test builds. */
@@ -539,6 +560,7 @@ export class App {
           this.tour.stop();
           for (let i = 0; i < frames; i++) {
             this.session?.update(1 / 30);
+            this.syncMinimap();
             this.tour.renderOnce();
           }
         },

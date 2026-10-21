@@ -143,7 +143,7 @@ export class TourSession {
     if (!this.paused) {
       this.body.yaw -= look.x;
       this.body.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.body.pitch + look.y));
-      this.acc += dt;
+      this.acc += Math.max(0, dt);
       const move = this.input.move;
       let steps = 0;
       while (this.acc >= FIXED_DT && steps < 24) {

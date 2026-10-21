@@ -121,7 +121,15 @@ tour keeps your position.
 
 CAD Tour is a Progressive Web App. In Chrome on Android open the menu and pick **Install app** (or
 use **Install as an app** in the CAD Tour menu when it is offered). It then opens full screen, keeps
-the screen awake during a tour, and works offline once the textures have been cached.
+the screen awake during a tour, and works offline once the textures have been cached. When a new
+version is published, the app loads it by itself the next time the start screen shows; a tour in
+progress is never interrupted.
+
+## Testing
+
+`npm test` runs the unit tests and `npm run test:e2e` the browser tests (it builds a test build
+first and serves it on port 4174). For screenshots of every room at several screen sizes, start
+`npm run dev` and run `node scripts/shots-app.mjs http://localhost:5173/cad-tour/ qa-output medium walk all desktop,fold,cover`.
 
 ## Assets
 

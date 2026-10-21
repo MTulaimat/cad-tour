@@ -1,6 +1,6 @@
 import {
   Box3,
-  Clock,
+  Timer,
   Color,
   Group,
   MeshPhysicalMaterial,
@@ -85,12 +85,17 @@ export class Tour {
   private lights: InteriorLights | null = null;
   private capture: ProbeCapture | null = null;
   private currentFloor = -1;
+  /** A floor the player reached before it was built; it becomes current once it is. */
+  private wantedFloor = -1;
   private heroLoaded = false;
   private pending: number[] = [];
+  private building = false;
+  private buildingFloor = -1;
+  private floorWaiters = new Map<number, (() => void)[]>();
   private loadToken = 0;
   private width = 1;
   private height = 1;
-  private clock = new Clock();
+  private timer = new Timer();
   private running = false;
   /** Called every frame before rendering, with the frame delta in seconds. */
   onUpdate: ((dt: number) => void) | null = null;
@@ -205,22 +210,44 @@ export class Tour {
     const token = this.loadToken;
     const plan = this.plan;
     if (!plan) return;
-    while (this.pending.length > 0) {
-      await idle();
-      if (token !== this.loadToken) return;
-      const i = this.pending.shift()!;
-      const build = buildFloorGeometry(plan, i);
-      await idle();
-      if (token !== this.loadToken) return;
-      onAdded(this.addFloor(plan, i, build));
+    this.building = true;
+    try {
+      while (this.pending.length > 0) {
+        await idle();
+        if (token !== this.loadToken) return;
+        const i = this.pending.shift()!;
+        this.buildingFloor = i;
+        const build = buildFloorGeometry(plan, i);
+        await idle();
+        if (token !== this.loadToken) return;
+        onAdded(this.addFloor(plan, i, build));
+        if (this.wantedFloor === i) this.setFloor(i, true);
+        for (const done of this.floorWaiters.get(i) ?? []) done();
+        this.floorWaiters.delete(i);
+      }
+      // Probes again, now that stairwells see the floors above and below.
+      this.setFloor(this.currentFloor, true);
+      this.captureProbes();
+    } finally {
+      if (token === this.loadToken) {
+        this.building = false;
+        this.buildingFloor = -1;
+        // Nothing else is coming (also after a failed build): never leave a floor switch waiting.
+        for (const list of this.floorWaiters.values()) for (const done of list) done();
+        this.floorWaiters.clear();
+      }
     }
-    // Probes again, now that stairwells see the floors above and below.
-    this.setFloor(this.currentFloor, true);
-    this.captureProbes();
   }
 
   get loadingFloors(): boolean {
-    return this.pending.length > 0;
+    return this.building || this.pending.length > 0;
+  }
+
+  /** Resolves once floor `index` is built (at once when it already is). */
+  whenFloorBuilt(index: number): Promise<void> {
+    const coming = this.pending.includes(index) || this.buildingFloor === index;
+    if (this.floors[index] || !this.plan || !coming) return Promise.resolve();
+    return new Promise((resolve) => this.floorWaiters.set(index, [...(this.floorWaiters.get(index) ?? []), resolve]));
   }
 
   private addFloor(plan: FloorPlan, i: number, build: FloorBuild): FloorObjects {
@@ -309,6 +336,7 @@ export class Tour {
     this.capture = new ProbeCapture(this.renderer, this.env.cubeSize);
     // Light every floor's rooms while capturing so stairwells see lit neighbours.
     const saved = this.currentFloor;
+    const wanted = this.wantedFloor;
     for (let i = 0; i < this.floors.length; i++) {
       const f = this.floors[i];
       if (!f) continue;
@@ -316,12 +344,14 @@ export class Tour {
       this.capture.capture(this.scene, f.rooms, f.probes, this.probeHidden);
     }
     this.setFloor(saved, true);
+    this.wantedFloor = wanted;
   }
 
   /** The player's floor drives the shadow fit and where the interior light pools go. */
   setFloor(index: number, force = false): void {
     if (!this.plan || (!force && index === this.currentFloor)) return;
     const f = this.floors[index];
+    this.wantedFloor = f ? -1 : index;
     if (!f) return;
     this.currentFloor = index;
     const all = new Box3();
@@ -383,8 +413,7 @@ export class Tour {
   start(): void {
     if (this.running) return;
     this.running = true;
-    this.clock.start();
-    this.clock.getDelta();
+    this.timer.reset();
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -398,7 +427,10 @@ export class Tour {
   }
 
   private frame(): void {
-    const dt = Math.min(0.1, this.clock.getDelta());
+    // performance.now() throughout, like reset(): the rAF timestamp is the frame's start time and
+    // can be earlier than a reset made during the previous frame, which gave negative deltas.
+    this.timer.update();
+    const dt = Math.min(0.1, Math.max(0, this.timer.getDelta()));
     this.onUpdate?.(dt);
     if (this.dyn.update(dt * 1000)) this.applySize();
     this.post.render(dt);
@@ -446,7 +478,12 @@ export class Tour {
     this.capture?.dispose();
     this.capture = null;
     this.currentFloor = -1;
+    this.wantedFloor = -1;
     this.pending = [];
+    this.building = false;
+    this.buildingFloor = -1;
+    for (const list of this.floorWaiters.values()) for (const done of list) done();
+    this.floorWaiters.clear();
     this.loadToken++;
     this.plan = null;
   }

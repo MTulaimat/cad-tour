@@ -25,8 +25,9 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       // The e2e suite runs a test build; a service worker there would cache between runs.
       disable: mode === 'test',
-      registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // Registered from src/app/pwa.ts, which applies updates when no tour is open.
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['icons/icon.svg', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'],
       manifest: {
         name: 'CAD Tour',

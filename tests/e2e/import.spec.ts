@@ -8,6 +8,34 @@ async function shot(page: Page, name: string) {
   if (shots) await page.screenshot({ path: `${shots}/import-${name}.png` });
 }
 
+type TourHook = {
+  __tour: {
+    session: { plan: { floors: { walls: { thickness: number }[]; rooms: { name: string; polygon: { x: number; y: number }[] }[] }[] } };
+    setState(s: Record<string, unknown>): void;
+    room(): string;
+    still(frames: number): Promise<void>;
+  };
+};
+
+async function buildAndStart(page: Page) {
+  await page.getByTestId('build-scene').click();
+  await expect(page.getByTestId('tap-to-start')).toBeVisible({ timeout: 240_000 });
+  await page.getByTestId('start-btn').click();
+  await expect(page.getByTestId('hud')).toBeVisible();
+}
+
+/** Puts the player in the middle of a room by name and checks the HUD says so. */
+async function walkInto(page: Page, name: string) {
+  await page.evaluate((name) => {
+    const t = (window as unknown as TourHook).__tour;
+    const room = t.session.plan.floors[0].rooms.find((r) => r.name === name)!;
+    const c = room.polygon.reduce((a, p) => ({ x: a.x + p.x / room.polygon.length, y: a.y + p.y / room.polygon.length }), { x: 0, y: 0 });
+    t.setState({ x: c.x, y: c.y, yaw: 0, pitch: -0.1 });
+  }, name);
+  await expect(page.getByTestId('room-name')).toHaveText(name, { timeout: 30_000 });
+  await page.evaluate(() => (window as unknown as TourHook).__tour.still(4));
+}
+
 async function open(page: Page, file: string) {
   await page.addInitScript(() => localStorage.setItem('cad-tour:settings', JSON.stringify({ quality: 'low', renderScale: 0.5 })));
   await page.goto('./');
@@ -60,6 +88,21 @@ test.describe('dxf import', () => {
     await expect(page.getByLabel('Name of غرفة نوم 2')).toHaveValue('غرفة نوم 2');
     await shot(page, 'messy-report');
     await expect(page.getByTestId('import-warnings')).toContainText('gaps');
+    await buildAndStart(page);
+    await walkInto(page, 'غرفة نوم 2');
+    await shot(page, 'messy-tour');
+  });
+
+  test('single-line sample builds walls at the default thickness and tours', async ({ page }) => {
+    await open(page, 'samples/single-line-walls.dxf');
+    await expect(page.getByTestId('plan-preview')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('layers-continue').click();
+    await expect(page.getByTestId('stat-rooms')).toHaveText('4', { timeout: 60_000 });
+    await buildAndStart(page);
+    const thick = await page.evaluate(() => (window as unknown as TourHook).__tour.session.plan.floors[0].walls.map((w) => w.thickness));
+    expect(new Set(thick)).toEqual(new Set([0.2]));
+    await walkInto(page, 'Bedroom 1');
+    await shot(page, 'single-tour');
   });
 
   test('a DWG file is refused with the exact message', async ({ page }) => {

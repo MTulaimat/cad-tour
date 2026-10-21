@@ -88,6 +88,9 @@ export class MaterialLibrary {
     const m = s.physical ? new MeshPhysicalMaterial(clean) : new MeshStandardMaterial(clean);
     m.name = key;
     if (s.transparent) m.depthWrite = false;
+    // Both faces go into the shadow map: with back faces only, the filter kernel let a thread
+    // of sunlight through every inside corner of the (closed, thick) walls.
+    m.shadowSide = DoubleSide;
     return m;
   }
 

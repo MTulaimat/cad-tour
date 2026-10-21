@@ -7,6 +7,7 @@ import { DoorController } from '../../src/collision/doors';
 import { buildFloorGeometry } from '../../src/geometry';
 import type { Vec2 } from '../../src/data/schema';
 import { entrances, roomAt, startSpawn } from '../../src/plan/navigation';
+import { ModeTransition } from '../../src/controls/transition';
 
 const plan = normalizePlan(createDemoPlan());
 const world = new CollisionWorld(plan);
@@ -111,6 +112,24 @@ describe('collision world', () => {
     const doors = new DoorController(doorDefs, elev);
     for (let k = 0; k < 800; k++) body.step({ x: 0, y: 1, run: true }, world, doors.segments());
     expect(body.position.x).toBeLessThan(11.07 - 0.24);
+  });
+});
+
+describe('camera mode transition', () => {
+  it('stays between first and third person whatever the frame delta', () => {
+    const t = new ModeTransition();
+    for (const dt of [-0.3, -2, 0.016, 5, -1]) {
+      t.update(dt);
+      expect(t.blend).toBeGreaterThanOrEqual(0);
+      expect(t.blend).toBeLessThanOrEqual(1);
+    }
+    t.set('third');
+    for (const dt of [-0.5, 0.2, 0.2, 0.2, 9, -9]) {
+      t.update(dt);
+      expect(t.blend).toBeGreaterThanOrEqual(0);
+      expect(t.blend).toBeLessThanOrEqual(1);
+    }
+    expect(t.blend).toBe(1);
   });
 });
 

@@ -36,8 +36,8 @@ export class ModeTransition {
   }
 
   update(dt: number): void {
-    const step = dt / DURATION;
-    this.t = this.target > this.t ? Math.min(1, this.t + step) : Math.max(0, this.t - step);
+    const step = Math.max(0, dt) / DURATION;
+    this.t = this.target > this.t ? Math.min(this.target, this.t + step) : Math.max(this.target, this.t - step);
   }
 
   apply(first: CameraPose, third: CameraPose, out: CameraPose): void {

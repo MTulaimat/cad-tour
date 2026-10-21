@@ -44,10 +44,12 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Sized by inset alone: an explicit 100dvh kept its old value on Android Chrome when an installed
+   app's window shrank around the camera cutout, pushing the bottom controls off screen. */
 body {
   position: fixed;
   inset: 0;
-  height: 100dvh;
+  height: auto;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
@@ -57,7 +59,6 @@ body {
 #app {
   position: fixed;
   inset: 0;
-  height: 100dvh;
 }
 
 .stage {
@@ -697,6 +698,8 @@ input[type='range'] {
   width: min(52%, 14rem);
   accent-color: var(--accent);
   height: var(--hit);
+  /* A vertical swipe over a slider scrolls the menu instead of moving the slider. */
+  touch-action: pan-y;
 }
 
 .switch {
