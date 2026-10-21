@@ -9,7 +9,7 @@ import { ThirdPersonCamera } from '../controls/thirdPerson';
 import { ModeTransition } from '../controls/transition';
 import type { InputState } from '../controls/input';
 import type { DoorObject, FloorObjects } from '../geometry/merge';
-import { floorSpawn, roomAt, startSpawn, type Spawn } from '../plan/navigation';
+import { entrances, floorSpawn, roomAt, startSpawn, type Spawn } from '../plan/navigation';
 import type { Tour } from './tour';
 
 export interface PlayerState {
@@ -60,6 +60,7 @@ export class TourSession {
       this.doorObjects.map((d) => d.def),
       (id) => plan.floors.find((f) => f.id === id)?.elevation ?? 0,
     );
+    for (const f of plan.floors) for (const e of entrances(plan, f)) this.doors.locked.add(e.openingId);
     const spawn = startSpawn(plan);
     this.body = new PlayerBody(spawn.position, plan.floors[spawn.floorIndex].elevation, spawn.yaw);
     this.body.feet = this.world.heightAt(spawn.position, this.body.feet);

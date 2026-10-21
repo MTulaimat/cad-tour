@@ -18,6 +18,8 @@ const sizes = [
 ];
 // [name, x, y, feet, yaw (deg), pitch (deg), mode, frames]
 const views = [
+  // 'start' keeps the spawn the tour chose (take it first).
+  ['start', null, null, null, null, null, null, 6],
   ['living', 8.9, 1.0, 0, 70, -6, 'first', 4],
   ['third', 7.8, 3.9, 0, 120, -10, 'third', 12],
   ['bedroom', 6.6, 0.7, 3, -40, -8, 'first', 4],
@@ -36,7 +38,7 @@ for (const [sname, w, h, touch, dpr] of sizes) {
   await page.waitForFunction(() => window.__tour?.session && !document.querySelector('[data-testid=hud]').hidden, null, { timeout: 300_000 });
   for (const [name, x, y, feet, yaw, pitch, mode, frames] of views) {
     if (onlyViews && !onlyViews.includes(name)) continue;
-    await page.evaluate(([x, y, feet, yaw, pitch, mode]) => window.__tour.setState({ x, y, feet, yaw, pitch, mode }), [x, y, feet, yaw * deg, pitch * deg, mode]);
+    if (x !== null) await page.evaluate(([x, y, feet, yaw, pitch, mode]) => window.__tour.setState({ x, y, feet, yaw, pitch, mode }), [x, y, feet, yaw * deg, pitch * deg, mode]);
     await page.evaluate((n) => window.__tour.still(n), frames);
     await page.screenshot({ path: `${outDir}/${prefix}-${sname}-${name}.png` });
     console.log('saved', sname, name, await page.evaluate(() => window.__tour.room()));

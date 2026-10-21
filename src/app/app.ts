@@ -397,7 +397,7 @@ export class App {
       this.input.clear();
       this.touch.reset();
       this.km.releaseLock();
-    } else if (this.started && !this.layout.info.touch && !this.menu.open) this.km.requestLock();
+    }
   }
 
   private openMenu(): void {
@@ -412,7 +412,7 @@ export class App {
   private closeMenu(): void {
     this.menu.show(false);
     if (this.session && this.started) this.session.paused = this.help.open;
-    if (this.started && !this.layout.info.touch && !this.help.open) this.km.requestLock();
+    // The mouse stays free so the HUD can be clicked; a click on the view captures it again.
   }
 
   private exportJson(): void {

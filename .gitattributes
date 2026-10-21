@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+# Binary assets
+*.ktx2 binary
+*.hdr binary
+*.png binary
+*.jpg binary
+*.woff2 binary
+
+# DXF samples are kept byte for byte (CRLF, legacy code page in messy-layer0.dxf)
+*.dxf -text

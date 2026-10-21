@@ -54,7 +54,8 @@ export function tierConfig(tier: Tier, mobile: boolean): TierConfig {
         pointLights: 0,
         rectLights: 0,
         transmissionGlass: false,
-        probes: false,
+        // Probes are a one-off capture; without them interiors take the HDRI's ground colour.
+        probes: true,
         probeSize: 128,
         anisotropy: 2,
       };

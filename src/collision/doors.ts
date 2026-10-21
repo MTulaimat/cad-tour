@@ -28,6 +28,8 @@ const ease = (t: number) => t * t * (3 - 2 * t);
  */
 export class DoorController {
   readonly doors: DoorState[] = [];
+  /** Openings that never open by themselves (doors out of the plan). */
+  readonly locked = new Set<string>();
   private fixed: Segment[] = [];
 
   constructor(
@@ -69,7 +71,7 @@ export class DoorController {
     let moved = false;
     for (const d of this.doors) {
       const onFloor = Math.abs(feet - d.def.elevation) < 1.6;
-      const near = onFloor && dist(player, d.def.center) < OPEN_RADIUS;
+      const near = onFloor && !this.locked.has(d.def.openingId) && dist(player, d.def.center) < OPEN_RADIUS;
       if (near) {
         d.target = 1;
         d.clearTime = 0;

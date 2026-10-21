@@ -100,4 +100,41 @@ test.describe('walkthrough', () => {
     await page.getByTestId('mode-btn').click();
     await page.waitForFunction(() => window.__tour.getState()?.mode === 'first', null, { timeout: 10_000 });
   });
+
+  test('survives a WebGL context loss and restore, keeping the player', async ({ page }) => {
+    await startDemo(page);
+    await page.evaluate(() => window.__tour.setState({ x: 7.5, y: 3.0, feet: 0, yaw: 0.7 }));
+    await page.evaluate(() => {
+      const gl = (document.querySelector('[data-testid=canvas]') as HTMLCanvasElement).getContext('webgl2')!;
+      (window as unknown as { __lose: WEBGL_lose_context }).__lose = gl.getExtension('WEBGL_lose_context')!;
+      (window as unknown as { __lose: WEBGL_lose_context }).__lose.loseContext();
+    });
+    await expect(page.getByTestId('toast')).toContainText('Graphics were reset');
+    await page.evaluate(() => (window as unknown as { __lose: WEBGL_lose_context }).__lose.restoreContext());
+    await expect(page.getByTestId('toast')).toContainText('View restored', { timeout: 60_000 });
+    const s = await page.evaluate(() => window.__tour.getState()!);
+    expect(s.x).toBeCloseTo(7.5, 2);
+    expect(s.yaw).toBeCloseTo(0.7, 2);
+    // Frames are rendered again.
+    const f0 = await page.evaluate(() => (window.__tour as unknown as { tour: { renderer: { info: { render: { frame: number } } } } }).tour.renderer.info.render.frame);
+    await page.waitForTimeout(1500);
+    const f1 = await page.evaluate(() => (window.__tour as unknown as { tour: { renderer: { info: { render: { frame: number } } } } }).tour.renderer.info.render.frame);
+    expect(f1).toBeGreaterThan(f0);
+  });
+
+  test('stops rendering while the page is hidden', async ({ page }) => {
+    await startDemo(page);
+    const running = () => page.evaluate(() => (window.__tour as unknown as { tour: { isRunning: boolean } }).tour.isRunning);
+    expect(await running()).toBe(true);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(await running()).toBe(false);
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(await running()).toBe(true);
+  });
 });

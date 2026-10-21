@@ -51,6 +51,7 @@ export class LayoutWatcher {
     this.ro = new ResizeObserver(() => this.schedule());
     this.ro.observe(root);
     addEventListener('orientationchange', () => this.schedule());
+    addEventListener('resize', () => this.schedule());
     visualViewport?.addEventListener('resize', () => this.schedule());
   }
 

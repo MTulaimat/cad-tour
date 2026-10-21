@@ -6,6 +6,7 @@ import { PlayerBody, FIXED_DT } from '../../src/collision/capsule';
 import { DoorController } from '../../src/collision/doors';
 import { buildFloorGeometry } from '../../src/geometry';
 import type { Vec2 } from '../../src/data/schema';
+import { entrances, roomAt, startSpawn } from '../../src/plan/navigation';
 
 const plan = normalizePlan(createDemoPlan());
 const world = new CollisionWorld(plan);
@@ -110,5 +111,28 @@ describe('collision world', () => {
     const doors = new DoorController(doorDefs, elev);
     for (let k = 0; k < 800; k++) body.step({ x: 0, y: 1, run: true }, world, doors.segments());
     expect(body.position.x).toBeLessThan(11.07 - 0.24);
+  });
+});
+
+describe('start and entrance', () => {
+  it('keeps only the front door shut, not the balcony door', () => {
+    expect(entrances(plan, plan.floors[0]).map((e) => e.openingId)).toEqual(['L1-d-entrance']);
+    const doors = new DoorController(doorDefs, elev);
+    doors.locked.add('L1-d-entrance');
+    const front = doors.doors.find((d) => d.def.openingId === 'L1-d-entrance')!;
+    for (let k = 0; k < 240; k++) doors.update(FIXED_DT, front.def.center, 0, world, 0.25);
+    expect(front.t).toBe(0);
+  });
+
+  it('starts inside the hall, facing into the plan and clear of furniture', () => {
+    const s = startSpawn(plan);
+    const floor = plan.floors[s.floorIndex];
+    expect(roomAt(floor, s.position)?.name).toBe('Entry hall');
+    // Looks east-ish down the hall (yaw 0 is north, -90 east), not back at the door (south).
+    expect(s.yaw).toBeLessThan(-0.5);
+    expect(s.yaw).toBeGreaterThan(-2);
+    const body = new PlayerBody(s.position, floor.elevation, s.yaw);
+    body.step({ x: 0, y: 0, run: false }, world, []);
+    expect(Math.hypot(body.position.x - s.position.x, body.position.y - s.position.y)).toBeLessThan(0.01);
   });
 });
