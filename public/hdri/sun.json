@@ -1,0 +1,72 @@
+{
+  "hdri": {
+    "id": "rhodes_memorial",
+    "name": "Rhodes Memorial",
+    "author": "Greg Zaal, Rico Cilliers",
+    "authors": {
+      "Greg Zaal": "All",
+      "Rico Cilliers": "Backplates"
+    },
+    "url": "https://polyhaven.com/a/rhodes_memorial",
+    "license": "CC0-1.0"
+  },
+  "convention": "three.js r186 equirect (common.glsl.js equirectUv): u = atan(dir.z, dir.x) / (2*PI) + 0.5, v = asin(dir.y) / PI + 0.5, v = 1 is the top image row (HDRLoader and TextureLoader use flipY = true). Image centre looks along +X, u = 0.75 along +Z. Values assume scene.backgroundRotation and scene.environmentRotation are zero; if you rotate the sky by an Euler e, rotate the sun the same way: new Vector3(...direction).applyEuler(e).",
+  "azimuthDeg": 47.41,
+  "azimuthNote": "atan2(direction.z, direction.x) in degrees: 0 = +X, 90 = +Z, -90 = -Z",
+  "elevationDeg": 29.84,
+  "direction": [
+    0.58707,
+    0.49756,
+    0.63859
+  ],
+  "directionNote": "unit vector from the scene towards the sun: light.position = target + direction * distance",
+  "suggestedIntensity": 4.89,
+  "color": "#fff6ea",
+  "colorLinear": [
+    1,
+    0.9231,
+    0.8242
+  ],
+  "intensityNote": "DirectionalLight intensity in the HDR's own units, with color = `color` (sRGB hex) or colorLinear, so the light reproduces the sun energy measured inside 3 deg of the sun at environmentIntensity = 1. That energy was removed from env-1k.hdr, so env + light together match the original HDRI. Scale both by the same factor to change exposure.",
+  "irradiance": {
+    "sunNormal": 4.559,
+    "sunOnHorizontal": 2.268,
+    "skyOnHorizontal": 0.308,
+    "note": "luminance-weighted, HDR units; sky = everything in env-1k.hdr except the removed sun"
+  },
+  "env": {
+    "file": "hdri/env-1k.hdr",
+    "width": 1024,
+    "height": 512,
+    "bytes": 1646639,
+    "sunRemoved": true,
+    "sunCapDeg": 3,
+    "skyColorAroundSun": "#fffdfb"
+  },
+  "view": {
+    "cityAzimuthDeg": {
+      "from": 57,
+      "to": 154,
+      "centre": 110
+    },
+    "note": "Approximate, read off the image by eye: the Cape Town city view (suburbs, Cape Flats, mountains) spans these azimuths (same atan2(z, x) convention). The other directions show the memorial terrace, colonnade and trees. Point the main glazing and balcony at this range, or rotate the sky (and the sun with it) to suit the plan."
+  },
+  "backplates": {
+    "2k": {
+      "file": "hdri/backplate-2k.jpg",
+      "width": 2048,
+      "height": 1024,
+      "bytes": 377860
+    },
+    "4k": {
+      "file": "hdri/backplate-4k.jpg",
+      "width": 4096,
+      "height": 2048,
+      "bytes": 1457768
+    },
+    "madeFrom": "4k HDR",
+    "exposure": 4.75299,
+    "curve": "linear * exposure, soft shoulder above 0.6 approaching 1.0, sRGB OETF, JPEG q85 (mozjpeg, 4:2:0)",
+    "usage": "TextureLoader, colorSpace = SRGBColorSpace, mapping = EquirectangularReflectionMapping, scene.background; tone mapped again by ACES in post"
+  }
+}

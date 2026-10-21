@@ -1,0 +1,742 @@
+{
+  "generatedBy": "scripts/encode-textures.mjs",
+  "encoder": "KTX-Software ktx create v4.4.2",
+  "pathsRelativeTo": "public/ (prefix with import.meta.env.BASE_URL)",
+  "conventions": {
+    "orientation": "bottom-left origin (KTXorientation \"ru\"): behaves like TextureLoader with flipY = true; KTX2Loader leaves flipY = false",
+    "albedo": "ETC1S/BasisLZ, sRGB transfer, BT.709 primaries (KTX2Loader sets SRGBColorSpace)",
+    "orm": "ETC1S/BasisLZ, linear, primaries unspecified (NoColorSpace). R = ambient occlusion, G = roughness, B = metalness",
+    "normal": "tangent space, OpenGL (+Y up, Poly Haven nor_gl), RGB = XYZ, linear (NoColorSpace). 1k = UASTC + RDO + Zstandard; 2k and 4k = ETC1S/BasisLZ to fit the download budget. normalScale (1, 1)",
+    "mipmaps": "full chain, wrap-around filtering (textures tile)",
+    "uvs": "set texture.repeat = 1 / metersPerRepeat for UVs in meters (or scale UVs by the same factor)"
+  },
+  "materials": {
+    "oak": {
+      "key": "oak",
+      "use": "Light oak plank floor: living, bedrooms, hall, landing and the stair",
+      "sourceId": "laminate_floor_02",
+      "name": "Laminate Floor 02",
+      "sourceUrl": "https://polyhaven.com/a/laminate_floor_02",
+      "author": "Dario Barresi, Charlotte Baglioni",
+      "authors": {
+        "Dario Barresi": "Processing",
+        "Charlotte Baglioni": "photography"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 1.7,
+        "y": 1.7
+      },
+      "resolutions": [
+        "1k",
+        "2k",
+        "4k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/oak/1k/albedo.ktx2",
+            "bytes": 195178,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/oak/1k/normal.ktx2",
+            "bytes": 418627,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/oak/1k/orm.ktx2",
+            "bytes": 147809,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 761614
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/oak/2k/albedo.ktx2",
+            "bytes": 765567,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/oak/2k/normal.ktx2",
+            "bytes": 584655,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/oak/2k/orm.ktx2",
+            "bytes": 617783,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1968005
+        },
+        "4k": {
+          "albedo": {
+            "path": "textures/oak/4k/albedo.ktx2",
+            "bytes": 3194503,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/oak/4k/normal.ktx2",
+            "bytes": 2609852,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/oak/4k/orm.ktx2",
+            "bytes": 2602483,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 8406838
+        }
+      }
+    },
+    "plaster": {
+      "key": "plaster",
+      "use": "Warm white painted plaster: interior walls and ceilings",
+      "sourceId": "white_stucco",
+      "name": "White Stucco",
+      "sourceUrl": "https://polyhaven.com/a/white_stucco",
+      "author": "Amal Kumar",
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 1.9981,
+        "y": 1.9981
+      },
+      "resolutions": [
+        "1k",
+        "2k",
+        "4k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/plaster/1k/albedo.ktx2",
+            "bytes": 176085,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/plaster/1k/normal.ktx2",
+            "bytes": 1120144,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/plaster/1k/orm.ktx2",
+            "bytes": 68325,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1364554
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/plaster/2k/albedo.ktx2",
+            "bytes": 687842,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/plaster/2k/normal.ktx2",
+            "bytes": 856413,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/plaster/2k/orm.ktx2",
+            "bytes": 335222,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1879477
+        },
+        "4k": {
+          "albedo": {
+            "path": "textures/plaster/4k/albedo.ktx2",
+            "bytes": 2671265,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/plaster/4k/normal.ktx2",
+            "bytes": 3543156,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/plaster/4k/orm.ktx2",
+            "bytes": 1539167,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 7753588
+        }
+      }
+    },
+    "tile": {
+      "key": "tile",
+      "use": "Light glazed ceramic floor tile: bathroom and kitchen floor",
+      "sourceId": "interior_tiles",
+      "name": "Interior Tiles",
+      "sourceUrl": "https://polyhaven.com/a/interior_tiles",
+      "author": "Charlotte Baglioni",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 1.9,
+        "y": 1.9
+      },
+      "resolutions": [
+        "1k",
+        "2k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/tile/1k/albedo.ktx2",
+            "bytes": 198436,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/tile/1k/normal.ktx2",
+            "bytes": 463954,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/tile/1k/orm.ktx2",
+            "bytes": 142927,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 805317
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/tile/2k/albedo.ktx2",
+            "bytes": 743106,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/tile/2k/normal.ktx2",
+            "bytes": 241887,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/tile/2k/orm.ktx2",
+            "bytes": 573209,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1558202
+        }
+      }
+    },
+    "concrete": {
+      "key": "concrete",
+      "use": "Brushed concrete: balcony floor",
+      "sourceId": "brushed_concrete",
+      "name": "Brushed Concrete",
+      "sourceUrl": "https://polyhaven.com/a/brushed_concrete",
+      "author": "Dario Barresi, Dimitrios Savva",
+      "authors": {
+        "Dario Barresi": "Processing",
+        "Dimitrios Savva": "Photography"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 2.5,
+        "y": 2.5
+      },
+      "resolutions": [
+        "1k",
+        "2k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/concrete/1k/albedo.ktx2",
+            "bytes": 200542,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/concrete/1k/normal.ktx2",
+            "bytes": 1057021,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/concrete/1k/orm.ktx2",
+            "bytes": 177402,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1434965
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/concrete/2k/albedo.ktx2",
+            "bytes": 757851,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/concrete/2k/normal.ktx2",
+            "bytes": 830928,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/concrete/2k/orm.ktx2",
+            "bytes": 712334,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 2301113
+        }
+      }
+    },
+    "fabric": {
+      "key": "fabric",
+      "use": "Pale grey melange fabric: sofa, bed, armchair",
+      "sourceId": "jogging_melange",
+      "name": "Jogging Melange",
+      "sourceUrl": "https://polyhaven.com/a/jogging_melange",
+      "author": "colormass, Rico Cilliers",
+      "authors": {
+        "colormass": "Photography",
+        "Rico Cilliers": "Processing"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 0.2735,
+        "y": 0.2733
+      },
+      "resolutions": [
+        "1k",
+        "2k",
+        "4k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/fabric/1k/albedo.ktx2",
+            "bytes": 204313,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/fabric/1k/normal.ktx2",
+            "bytes": 1019373,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/fabric/1k/orm.ktx2",
+            "bytes": 179607,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1403293
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/fabric/2k/albedo.ktx2",
+            "bytes": 780585,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/fabric/2k/normal.ktx2",
+            "bytes": 798987,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/fabric/2k/orm.ktx2",
+            "bytes": 751376,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 2330948
+        },
+        "4k": {
+          "albedo": {
+            "path": "textures/fabric/4k/albedo.ktx2",
+            "bytes": 3213645,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/fabric/4k/normal.ktx2",
+            "bytes": 3343368,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/fabric/4k/orm.ktx2",
+            "bytes": 3155450,
+            "width": 4096,
+            "height": 4096,
+            "levels": 13,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 9712463
+        }
+      }
+    },
+    "exterior": {
+      "key": "exterior",
+      "use": "Rough off-white exterior render: facade",
+      "sourceId": "white_stucco_02",
+      "name": "White Stucco 02",
+      "sourceUrl": "https://polyhaven.com/a/white_stucco_02",
+      "author": "Dimitrios Savva",
+      "authors": {
+        "Dimitrios Savva": "All"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 1.8,
+        "y": 1.8
+      },
+      "dimensionsNote": "Poly Haven reports width 0.00007868050033721374 mm; derived from height and pixel aspect",
+      "resolutions": [
+        "1k",
+        "2k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/exterior/1k/albedo.ktx2",
+            "bytes": 198218,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/exterior/1k/normal.ktx2",
+            "bytes": 1268572,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/exterior/1k/orm.ktx2",
+            "bytes": 199379,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1666169
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/exterior/2k/albedo.ktx2",
+            "bytes": 747453,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/exterior/2k/normal.ktx2",
+            "bytes": 1054819,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/exterior/2k/orm.ktx2",
+            "bytes": 770301,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 2572573
+        }
+      }
+    },
+    "wood-light": {
+      "key": "wood-light",
+      "use": "Light white-oak veneer: furniture tops and fronts",
+      "sourceId": "silver_oak_veneer_01",
+      "name": "Silver Oak Veneer 01",
+      "sourceUrl": "https://polyhaven.com/a/silver_oak_veneer_01",
+      "author": "Jenelle van Heerden",
+      "authors": {
+        "Jenelle van Heerden": "All"
+      },
+      "license": "CC0-1.0",
+      "metersPerRepeat": {
+        "x": 1,
+        "y": 1
+      },
+      "resolutions": [
+        "1k",
+        "2k"
+      ],
+      "files": {
+        "1k": {
+          "albedo": {
+            "path": "textures/wood-light/1k/albedo.ktx2",
+            "bytes": 163375,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/wood-light/1k/normal.ktx2",
+            "bytes": 290598,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "UASTC",
+            "supercompression": "Zstandard",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/wood-light/1k/orm.ktx2",
+            "bytes": 112921,
+            "width": 1024,
+            "height": 1024,
+            "levels": 11,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 566894
+        },
+        "2k": {
+          "albedo": {
+            "path": "textures/wood-light/2k/albedo.ktx2",
+            "bytes": 632743,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "srgb"
+          },
+          "normal": {
+            "path": "textures/wood-light/2k/normal.ktx2",
+            "bytes": 177986,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "orm": {
+            "path": "textures/wood-light/2k/orm.ktx2",
+            "bytes": 407143,
+            "width": 2048,
+            "height": 2048,
+            "levels": 12,
+            "encoding": "ETC1S",
+            "supercompression": "BasisLZ",
+            "transfer": "linear"
+          },
+          "totalBytes": 1217872
+        }
+      }
+    }
+  },
+  "totals": {
+    "1k": 8002806,
+    "2k": 13828190,
+    "4k": 25872889
+  }
+}
