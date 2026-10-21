@@ -62,6 +62,8 @@ export class App {
   private updates: import('./pwa').AppUpdates | null = null;
   /** The start screen was used since it last showed (an update then waits for the next time). */
   private startTouched = false;
+  /** A plan (demo, file or last plan) was asked for; init must not put the start screen back. */
+  private planRequested = false;
 
   constructor(root: HTMLElement) {
     this.canvas = el('canvas', { 'aria-label': '3D view of the apartment', tabindex: '0', 'data-testid': 'canvas' });
@@ -199,19 +201,22 @@ export class App {
   }
 
   async init(): Promise<void> {
-    // No service worker in the test build (it would serve a stale shell between runs).
-    if (import.meta.env.MODE !== 'test' && !import.meta.env.DEV) {
-      const { AppUpdates } = await import('./pwa');
-      // Only on an untouched start screen: never under an open file picker or a file being read.
-      this.updates = new AppUpdates(() => !this.start.root.hidden && !this.started && !this.startTouched && document.visibilityState === 'visible');
-      this.start.root.addEventListener('pointerdown', () => (this.startTouched = true), { capture: true });
-    }
+    // The start screen is live from the first paint, so the person may already have picked the
+    // demo or a file while this awaits; then the start screen must not come back over it.
+    this.start.root.addEventListener('pointerdown', () => (this.startTouched = true), { capture: true });
     this.lastPlan = await loadLastPlan();
     this.start.setContinue(this.lastPlan ? this.lastPlan.name : null);
     const params = new URLSearchParams(location.search);
     if (params.has('demo')) await this.loadDemo(params.has('autostart'));
-    else this.showStart();
+    else if (!this.planRequested) this.showStart();
     document.body.dataset.ready = '1';
+    // No service worker in the test build (it would serve a stale shell between runs). Set up after
+    // the first screen so its download never delays it.
+    if (import.meta.env.MODE !== 'test' && !import.meta.env.DEV) {
+      const { AppUpdates } = await import('./pwa');
+      // Only on an untouched start screen: never under an open file picker or a file being read.
+      this.updates = new AppUpdates(() => !this.start.root.hidden && !this.started && !this.startTouched && document.visibilityState === 'visible');
+    }
   }
 
   // ---- settings and quality -------------------------------------------------
@@ -295,11 +300,13 @@ export class App {
   }
 
   private async loadDemo(autostart = false): Promise<void> {
+    this.planRequested = true;
     await this.build(await loadPlan(), autostart);
   }
 
   async openFile(file: File): Promise<void> {
     this.startTouched = true;
+    this.planRequested = true;
     const kind = await classifyFile(file);
     if (kind === 'dwg') return this.fail("Can't open this file", DWG_MESSAGE);
     if (kind === 'binary-dxf') return this.fail("Can't open this file", BINARY_DXF_MESSAGE);
@@ -326,6 +333,7 @@ export class App {
 
   /** Builds a plan into the scene, then shows tap to start. Never fails silently. */
   async build(plan: FloorPlan, autostart = false): Promise<void> {
+    this.planRequested = true;
     this.stopTour();
     this.importFlow.hide();
     this.start.show(false);
