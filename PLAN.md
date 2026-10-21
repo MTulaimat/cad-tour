@@ -392,7 +392,7 @@ README must cover: controls (desktop and touch), DXF import (how to prepare a DX
 
 | Milestone | Status | Commit | Notes |
 |---|---|---|---|
-| M0 Scaffold and hosting | not started | | |
+| M0 Scaffold and hosting | done | 71ab5a8 | Public repo MTulaimat/cad-tour created, Pages source set to GitHub Actions, workflow runs unit tests then builds and deploys. Placeholder confirmed live at https://mtulaimat.github.io/cad-tour/ |
 | M1 Data layer | not started | | |
 | M2 Geometry | not started | | |
 | M3 Look | not started | | |
@@ -403,4 +403,6 @@ README must cover: controls (desktop and touch), DXF import (how to prepare a DX
 
 ### Assumptions and deviations
 
-(none yet)
+- **A1. Git worktree.** The build session runs as a background job whose edit guard requires an isolated git worktree. The project folder got `git init` and a first commit (this file), and the code is built in the linked worktree `.claude/worktrees/build` on branch `build` (gitignored). Every milestone is pushed with `git push origin build:main`, so `main` on GitHub (and the Pages site) is exactly as planned; the project folder's own `main` checkout is fast-forwarded to `origin/main` at the end.
+- **A2. Toolchain versions.** Latest stable at build time, pinned exactly: three 0.186.1, postprocessing 6.39.5, n8ao 2.0.1, three-mesh-bvh 0.9.16, Vite 8.3.5, vite-plugin-pwa 2.0.0, Vitest 5.0.5, Playwright 1.64.1, TypeScript 7.0.2 (the native compiler), dxf-parser 1.1.2.
+- **A3. Pages workflow runs the unit tests** before building, so a red test never deploys.
