@@ -118,7 +118,8 @@ function lowerFloor(): Floor {
     {
       id: 'L1-living',
       name: 'Living and dining',
-      polygon: [p(3.8, 1.2), p(6.0, 1.2), p(6.0, 0), p(9.6, 0), p(9.6, 5.8), p(3.8, 5.8)],
+      // Wall-bounded region, as room detection finds it: it runs under the stair too.
+      polygon: [p(1.68, 0), p(9.6, 0), p(9.6, 5.8), p(3.8, 5.8), p(3.8, 1.2), p(1.68, 1.2)],
       floorMaterial: 'oak',
     },
     { id: 'L1-balcony', name: 'Balcony', polygon: rect(9.6, 1.5, 11.1, 5.5), floorMaterial: 'concrete', outdoor: true },
