@@ -64,27 +64,98 @@ export function guessUnits(width: number, depth: number): UnitKey {
   return best;
 }
 
+/**
+ * A size measured in the drawing (in drawing units) and the range it must fall in, in meters,
+ * for the unit to be right: door widths, furniture sizes, wall thicknesses.
+ */
+export interface SizeSample {
+  kind: 'doors' | 'furniture' | 'walls';
+  value: number;
+  min: number;
+  max: number;
+  /** How many votes the sample is worth (default 1). */
+  weight?: number;
+}
+
+export interface ContentUnits {
+  units: UnitKey;
+  /** Enough samples agree, and clearly more than for any other unit. */
+  confident: boolean;
+  /** Kinds of objects that agree with the unit, for the message. */
+  kinds: SizeSample['kind'][];
+  votes: number;
+  total: number;
+}
+
+/** The unit in which the most door, furniture and wall sizes come out at real-world sizes. */
+export function unitsFromContent(samples: SizeSample[]): ContentUnits | null {
+  if (samples.length === 0) return null;
+  const total = samples.reduce((n, s) => n + (s.weight ?? 1), 0);
+  const scored = (Object.keys(UNIT_SCALE) as UnitKey[])
+    .map((u) => {
+      const ok = samples.filter((s) => {
+        const m = s.value * UNIT_SCALE[u];
+        return m >= s.min && m <= s.max;
+      });
+      return { u, votes: ok.reduce((n, s) => n + (s.weight ?? 1), 0), kinds: [...new Set(ok.map((s) => s.kind))] };
+    })
+    .sort((a, b) => b.votes - a.votes);
+  const [best, next] = scored;
+  if (best.votes === 0) return null;
+  const confident = best.votes >= 3 && best.votes >= 2 * next.votes && best.votes >= total * 0.5;
+  return { units: best.u, confident, kinds: best.kinds, votes: best.votes, total };
+}
+
+const KIND_ORDER: SizeSample['kind'][] = ['doors', 'furniture', 'walls'];
+
+/** "doors and furniture", "doors, furniture and walls". */
+export function kindList(kinds: SizeSample['kind'][]): string {
+  const k = KIND_ORDER.filter((x) => kinds.includes(x)).map((x) => (x === 'walls' ? 'wall thicknesses' : x));
+  return k.length <= 1 ? (k[0] ?? 'drawing') : `${k.slice(0, -1).join(', ')} and ${k[k.length - 1]}`;
+}
+
 export interface UnitDecision {
   units: UnitKey;
-  /** True when the user must confirm (missing $INSUNITS or an implausible size). */
+  /** True when the user must confirm (missing $INSUNITS, or an implausible size the content can't settle). */
   ask: boolean;
   detected: UnitKey | null;
   reason: string | null;
+  /** Set when the content overrode the file's own unit, for the report. */
+  note?: string;
 }
 
-export function decideUnits(insunits: number | undefined | null, width: number, depth: number): UnitDecision {
+/**
+ * The drawing's unit: $INSUNITS when the plan comes out at a plausible size. When the file's unit
+ * makes the plan implausible and the doors, furniture and walls clearly point to another unit,
+ * that unit is used without asking (with a note). Otherwise the user is asked, with the content's
+ * unit (or the size-based guess) preselected.
+ */
+export function decideUnits(insunits: number | undefined | null, width: number, depth: number, content: ContentUnits | null = null): UnitDecision {
   const detected = unitsFromInsunits(insunits);
+  const fromContent = content?.confident ? content.units : null;
   if (detected) {
     const s = UNIT_SCALE[detected];
     if (plausible(width * s, depth * s)) return { units: detected, ask: false, detected, reason: null };
+    if (fromContent && fromContent !== detected && plausible(width * UNIT_SCALE[fromContent], depth * UNIT_SCALE[fromContent])) {
+      const from = UNIT_LABEL[detected].toLowerCase();
+      const to = UNIT_LABEL[fromContent].toLowerCase();
+      return {
+        units: fromContent,
+        ask: false,
+        detected,
+        reason: null,
+        note: `The file says ${from}, but its ${kindList(content!.kinds)} are drawn in ${to}, so ${to} are used.`,
+      };
+    }
     return {
-      units: guessUnits(width, depth),
+      units: fromContent ?? guessUnits(width, depth),
       ask: true,
       detected,
       reason: `The file says ${UNIT_LABEL[detected].toLowerCase()}, but that makes the plan ${formatSpan(Math.max(width, depth) * s)} across.`,
     };
   }
-  return { units: guessUnits(width, depth), ask: true, detected: null, reason: "The file doesn't say which units it uses." };
+  const hint = fromContent ? ` Its ${kindList(content!.kinds)} point to ${UNIT_LABEL[fromContent].toLowerCase()}.` : '';
+  return { units: fromContent ?? guessUnits(width, depth), ask: true, detected: null, reason: `The file doesn't say which units it uses.${hint}` };
 }
 
 export function formatSpan(m: number): string {

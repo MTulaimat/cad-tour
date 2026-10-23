@@ -1,26 +1,26 @@
-// Dev helper: imports a sample DXF headlessly and prints what the importer found.
-// Usage: npx tsx scripts/dxf-debug.ts samples/clean-layered.dxf
+// Dev helper: imports a DXF headlessly and prints what the importer found.
+// Usage: npx tsx scripts/dxf-debug.ts samples/clean-layered.dxf [--walls] [--furniture]
 import { readFileSync } from 'node:fs';
 import { readDrawing } from '../src/data/dxf/parse';
 import { buildPlan } from '../src/data/dxf/build';
-import { detectFloors, detectRoles } from '../src/data/dxf/layers';
-import { decideUnits } from '../src/data/dxf/units';
+import { prepareImport } from '../src/data/dxf/prepare';
 import { DEFAULT_SETTINGS } from '../src/data/dxf/types';
 import { polygonArea } from '../src/util/math2d';
 
 const file = process.argv[2];
 const model = readDrawing(new Uint8Array(readFileSync(file)));
-const units = decideUnits(model.insunits, model.bounds.maxX - model.bounds.minX, model.bounds.maxY - model.bounds.minY);
-const roles = detectRoles(model);
-const floors = detectFloors(model);
+const { roles, units, floors } = prepareImport(model);
 console.log('encoding', model.encoding, 'units', units, 'floors', JSON.stringify(floors));
 console.log('roles', JSON.stringify(roles));
 console.log('counts', model.segs.length, 'segs', model.arcs.length, 'arcs', model.texts.length, 'texts', model.inserts.length, 'inserts');
-const r = buildPlan(model, { roles, hidden: [], floors, settings: { ...DEFAULT_SETTINGS, units: units.units }, fileName: file });
+const extra = process.argv.find((a) => a.startsWith('--settings='));
+const r = buildPlan(model, { roles, hidden: [], floors, settings: { ...DEFAULT_SETTINGS, units: units.units, ...(extra ? JSON.parse(extra.slice(11)) : {}) }, fileName: file });
 for (const f of r.plan.floors) {
-  console.log(`\n${f.id} walls=${f.walls.length} openings=${f.openings.length} (doors ${f.openings.filter((o) => o.type === 'door').length})`);
+  console.log(`\n${f.id} ${f.name} elevation=${f.elevation} ceiling=${f.ceilingHeight} walls=${f.walls.length} openings=${f.openings.length} (doors ${f.openings.filter((o) => o.type === 'door').length})`);
   for (const room of f.rooms) console.log(`  room ${room.name.padEnd(20)} ${polygonArea(room.polygon).toFixed(2)} m2 ${room.floorMaterial}${room.outdoor ? ' outdoor' : ''} pts=${room.polygon.length}`);
   if (process.argv.includes('--walls')) for (const w of f.walls) console.log(`  wall ${w.id} ${w.centerline.map((p) => `(${p.x.toFixed(2)},${p.y.toFixed(2)})`).join(' ')} t=${w.thickness}`);
+  if (process.argv.includes('--openings')) for (const o of f.openings) { const w = f.walls.find((x) => x.id === o.wallId)!; const [a, b] = w.centerline; const t = o.offset / Math.hypot(b.x - a.x, b.y - a.y); console.log(`  opening ${o.id} ${o.type} ${o.style ?? ''} w=${o.width.toFixed(2)} h=${o.height.toFixed(2)} at (${(a.x + (b.x - a.x) * t).toFixed(2)},${(a.y + (b.y - a.y) * t).toFixed(2)}) on ${w.id}`); }
+  if (process.argv.includes('--furniture')) for (const it of f.furniture) console.log(`  furniture ${it.type.padEnd(14)} ${it.label ?? ''} (${it.position.x.toFixed(2)},${it.position.y.toFixed(2)})`);
 }
 console.log('\nstairs', r.plan.stairs.map((s) => `${s.fromFloorId}->${s.toFloorId} risers ${s.flights[0].risers} going ${s.flights[0].going.toFixed(3)}`));
 console.log('warnings:\n ' + r.report.warnings.map((w) => `[${w.kind}] ${w.message}`).join('\n '));

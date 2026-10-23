@@ -1,7 +1,6 @@
 import { readDrawing, resetParseCaches } from './parse';
 import { buildPlan } from './build';
-import { detectFloors, detectRoles } from './layers';
-import { decideUnits } from './units';
+import { prepareImport } from './prepare';
 import type { DrawingModel } from './types';
 import { summarize, type WorkerIn, type WorkerOut } from './protocol';
 
@@ -19,9 +18,8 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
     if (msg.type === 'parse') {
       resetParseCaches();
       model = readDrawing(new Uint8Array(msg.bytes), (f) => post({ type: 'progress', fraction: f * 0.9, label: 'Reading the drawing' }));
-      const w = model.bounds.maxX - model.bounds.minX;
-      const h = model.bounds.maxY - model.bounds.minY;
-      const { summary, preview } = summarize(model, detectRoles(model), detectFloors(model), decideUnits(model.insunits, w, h));
+      const prep = prepareImport(model);
+      const { summary, preview } = summarize(model, prep.roles, prep.floors, prep.units);
       post({ type: 'parsed', summary, preview }, [preview.segs.buffer, preview.layer.buffer]);
     } else if (msg.type === 'build') {
       if (!model) throw new Error('Open a DXF file first.');

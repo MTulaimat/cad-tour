@@ -164,7 +164,7 @@ export function pairWalls(segs: Seg[], opts: WallOptions): { pieces: WallPiece[]
     return { a: s.a, d, n: perp(d), len: l, free: [[0, l]] };
   });
   // Candidate pairs: parallel, facing within the thickness range, overlapping.
-  const cands: { i: number; j: number; d: number }[] = [];
+  const cands: { i: number; j: number; d: number; tiny?: boolean }[] = [];
   const cell = Math.max(1, opts.maxPair * 4);
   const grid = new Map<string, number[]>();
   lines.forEach((l, i) => {
@@ -199,10 +199,26 @@ export function pairWalls(segs: Seg[], opts: WallOptions): { pieces: WallPiece[]
         const lo = Math.max(0, Math.min(b0, b1));
         const hi = Math.min(A.len, Math.max(b0, b1));
         if (hi - lo < Math.min(0.1, Math.min(A.len, B.len) * 0.5)) continue;
-        cands.push({ i, j, d });
+        // A wall is longer than it is thick.
+        if (hi - lo < d * 0.95) continue;
+        cands.push({ i, j, d, tiny: hi - lo < 0.3 });
       }
   }
-  cands.sort((x, y) => x.d - y.d);
+  // A tiny box (a stub of wall beside a door, between the jamb and a column) could pair either way.
+  // It belongs to the wall whose face lines it continues; a pair that continues no line waits.
+  const continues = (k: number) => {
+    const L = lines[k];
+    return lines.some((o, m) => {
+      if (m === k || Math.abs(cross(L.d, o.d)) > ANGLE_TOL || Math.abs(dot(sub(o.a, L.a), L.n)) > opts.tolerance) return false;
+      const u0 = dot(sub(o.a, L.a), L.d);
+      const u1 = dot(sub(add(o.a, scale(o.d, o.len)), L.a), L.d);
+      const gap = Math.max(Math.min(u0, u1) - L.len, -Math.max(u0, u1));
+      return gap > -1e-6 && gap <= 1.5;
+    });
+  };
+  const late = (c: { i: number; j: number; tiny?: boolean }) => (c.tiny && !continues(c.i) && !continues(c.j) ? 1 : 0);
+  const order = new Map(cands.map((c) => [c, late(c)]));
+  cands.sort((x, y) => order.get(x)! - order.get(y)! || x.d - y.d);
   const pieces: WallPiece[] = [];
   for (const { i, j, d } of cands) {
     const A = lines[i];
@@ -377,11 +393,34 @@ export function extractWalls(segs: Seg[], options: Partial<WallOptions> = {}): W
       return distToSeg(mid, a, b) <= p.thickness / 2 + opts.tolerance * 1.5;
     });
   };
-  const singles: WallPiece[] = leftovers
-    .filter((s) => dist(s.a, s.b) >= Math.min(opts.minSingle, 0.1))
-    .filter((s) => !inside(s))
+  const rest = leftovers.filter((s) => dist(s.a, s.b) >= Math.min(opts.minSingle, 0.1)).filter((s) => !inside(s));
+  // A leftover on the face line of a paired wall, carrying on from its end, extends that wall: its
+  // partner line is missing there (for example where a stair was drawn over the other face).
+  const extended: WallPiece[] = [];
+  const singleSegs = rest.filter((s) => {
+    const sd = normalize(sub(s.b, s.a));
+    for (const p of pieces) {
+      const pd = normalize(sub(p.b, p.a));
+      if (Math.abs(cross(sd, pd)) > ANGLE_TOL) continue;
+      const n = perp(pd);
+      const off = dot(sub(s.a, p.a), n);
+      if (Math.abs(Math.abs(off) - p.thickness / 2) > opts.tolerance * 1.5 || Math.abs(dot(sub(s.b, p.a), n) - off) > opts.tolerance) continue;
+      const pl = dist(p.a, p.b);
+      const u0 = Math.min(dot(sub(s.a, p.a), pd), dot(sub(s.b, p.a), pd));
+      const u1 = Math.max(dot(sub(s.a, p.a), pd), dot(sub(s.b, p.a), pd));
+      if (!(Math.abs(u1) <= opts.tolerance * 2 || Math.abs(u0 - pl) <= opts.tolerance * 2)) continue;
+      extended.push({ a: add(p.a, scale(pd, u0)), b: add(p.a, scale(pd, u1)), thickness: p.thickness, source: 'pair' });
+      return false;
+    }
+    return true;
+  });
+  const near = (q: Vec2, s: Seg) => distToSeg(q, s.a, s.b) <= opts.tolerance * 2;
+  const others = [...pieces, ...extended, ...singleSegs];
+  const singles: WallPiece[] = singleSegs
+    // Short stray lines touching nothing are drawing marks, not walls.
+    .filter((s) => dist(s.a, s.b) >= 0.6 || others.some((o) => o !== s && (near(s.a, o) || near(s.b, o) || near(o.a, s) || near(o.b, s))))
     .map((s) => ({ a: s.a, b: s.b, thickness: opts.defaultThickness, source: 'single' as const }));
-  const merged = mergePieces([...pieces, ...singles], opts.tolerance);
+  const merged = mergePieces([...pieces, ...extended, ...singles], opts.tolerance);
   const { pieces: walls, gaps } = closeGaps(merged, opts.maxGap, opts.tolerance);
   return {
     walls,

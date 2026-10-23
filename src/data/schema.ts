@@ -53,6 +53,18 @@ export interface Floor {
   furniture: Furniture[];
   /** Explicit railings: balcony edges, guards. Stairwell guards are derived from stairs. */
   railings: Railing[];
+  /** Free-standing columns, full height from this floor to the ceiling above them. */
+  columns?: Column[];
+}
+
+/** A structural column: round (`radius`) or rectangular (`width` by `depth`, turned by `rotation`). */
+export interface Column {
+  id: Id;
+  center: Vec2;
+  radius?: number;
+  width?: number;
+  depth?: number;
+  rotation?: number;
 }
 
 export interface Wall {
@@ -107,10 +119,15 @@ export interface Room {
   /** Closed polygon (first point is not repeated), counterclockwise. */
   polygon: Vec2[];
   floorMaterial: FloorMaterialKey;
-  /** Overrides the floor's ceiling height. */
+  /**
+   * Overrides the floor's ceiling height. A room with no floor above it (a double-height space
+   * beside a mezzanine) reaches up to the top of the floor above.
+   */
   ceilingHeight?: number;
   /** Open-air rooms (balconies, terraces) get no ceiling and exterior wall faces. */
   outdoor?: boolean;
+  /** Enclosed in glass (a glass balcony): its outside walls are built as full-height glazing. */
+  glazed?: boolean;
 }
 
 /**
@@ -149,7 +166,13 @@ export interface Stair {
   outline: Vec2[];
   flights: StairFlight[];
   landings: StairLanding[];
+  /** Oak treads with white paint (default), or matte black steel throughout. Its railings follow. */
+  finish?: StairFinish;
 }
+
+export type StairFinish = 'oak' | 'black-steel';
+
+export const STAIR_FINISHES: readonly StairFinish[] = ['oak', 'black-steel'];
 
 export interface Size3 {
   /** Width along the item's local x axis. */
@@ -179,4 +202,6 @@ export interface Railing {
   points: Vec2[];
   height: number;
   style: 'glass' | 'metal';
+  /** Metal railings: brushed (default) or matte black steel, to match a steel stair. */
+  finish?: 'brushed' | 'black-steel';
 }

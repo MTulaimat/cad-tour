@@ -35,6 +35,8 @@ export interface PlacedOpening {
   sill: number;
   swing?: DoorSwing;
   style?: DoorStyle;
+  /** Glazing from the floor to the top of the wall (its height is set once wall heights are known). */
+  fullHeight?: boolean;
 }
 
 export interface OpeningOptions {
@@ -46,12 +48,19 @@ export interface OpeningOptions {
   maxPassage: number;
   /** Gaps narrower than this were already closed as drawing gaps. */
   minGap: number;
+  /**
+   * Wider gaps inside the plan, up to this wide, are left open from floor to ceiling (open plan);
+   * a line across them still separates the rooms. Gaps in outside walls up to this wide are glazed.
+   */
+  maxOpen?: number;
 }
 
 export interface OpeningResult {
   walls: WallPiece[];
   openings: PlacedOpening[];
   warnings: string[];
+  /** Lines across open gaps, which split rooms without building a wall. */
+  boundaries: { a: Vec2; b: Vec2 }[];
 }
 
 const PAR = Math.sin((4 * Math.PI) / 180);
@@ -97,6 +106,8 @@ function bridge(walls: WallPiece[], host: Host, width: number, tol: number): { w
     const d = normalize(sub(w.b, w.a));
     if (Math.abs(cross(d, dir)) > PAR) continue;
     if (Math.abs(dot(sub(w.a, o), nrm)) > Math.max(w.thickness, wall.thickness) / 2 + tol) continue;
+    // A column or a thicker wall next to the opening stays its own piece.
+    if (w !== wall && Math.abs(w.thickness - wall.thickness) > 0.06) continue;
     const u0 = dot(sub(w.a, o), dir);
     const u1 = dot(sub(w.b, o), dir);
     members.push({ w, lo: Math.min(u0, u1), hi: Math.max(u0, u1) });
@@ -141,7 +152,7 @@ function projectCorners(host: Host, corners: Vec2[]): [number, number] {
   return [Math.min(...us), Math.max(...us)];
 }
 
-export function placeOpenings(wallsIn: WallPiece[], doors: DoorCandidate[], windows: WindowCandidate[], opts: OpeningOptions): OpeningResult {
+export function placeOpenings(wallsIn: WallPiece[], doors: DoorCandidate[], windows: WindowCandidate[], opts: OpeningOptions, doorLines: WindowCandidate[] = []): OpeningResult {
   const walls = wallsIn.slice();
   const placed: { open: PlacedOpening; center: Vec2 }[] = [];
   const warnings: string[] = [];
@@ -184,7 +195,17 @@ export function placeOpenings(wallsIn: WallPiece[], doors: DoorCandidate[], wind
         const host = findHost(walls, c, dc.radius, closed);
         if (!host) continue;
         if (Math.abs(dot(open, host.dir)) > 0.45) continue;
-        if (!best || host.perpDist < best.score) best = { host, closed, open, score: host.perpDist };
+        // The closed leaf spans a gap: a leaf lying along solid wall is the open position, and a
+        // leaf whose tip reaches the end of a wall on the same line (the far jamb) is closed.
+        const l = dist(host.wall.a, host.wall.b);
+        const covered = Math.max(0, Math.min(l, host.u + dc.radius / 2) - Math.max(0, host.u - dc.radius / 2)) / dc.radius;
+        const tip = dc.ends[k];
+        const jamb = walls.some((w) => {
+          if (Math.abs(cross(normalize(sub(w.b, w.a)), host.dir)) > PAR) return false;
+          return Math.min(dist(tip, w.a), dist(tip, w.b)) < w.thickness / 2 + 0.1;
+        });
+        const score = host.perpDist + covered * 0.5 - (jamb ? 0.3 : 0);
+        if (!best || score < best.score) best = { host, closed, open, score };
       }
       if (best) {
         const width = Math.min(2.4, Math.max(0.6, dc.radius));
@@ -221,24 +242,78 @@ export function placeOpenings(wallsIn: WallPiece[], doors: DoorCandidate[], wind
     commit({ ...host, u: (u0 + u1) / 2 }, width, 'window', {});
   }
 
-  // Remaining gaps between collinear pieces: door-sized ones become open passages.
+  // Glazing drawn as lines on a door layer across a wall gap: glass doors.
+  for (const gd of doorLines) {
+    const c = scale(gd.corners.reduce((acc, p) => add(acc, p), { x: 0, y: 0 }), 1 / gd.corners.length);
+    const host = findHost(walls, c, footprintSpan(gd.corners), null);
+    if (!host) {
+      warnings.push(`Door lines near ${fmt(c)} are not on a wall and were left out.`);
+      continue;
+    }
+    const [u0, u1] = projectCorners(host, gd.corners);
+    const width = Math.min(6, Math.max(0.6, u1 - u0));
+    commit({ ...host, u: (u0 + u1) / 2 }, width, 'door', width >= 1.2 ? { style: 'sliding-glass' } : { style: 'hinged', swing: { hinge: 'start', side: 'left' } });
+  }
+
+  // Remaining gaps between collinear pieces: in an outside wall they are glazed; inside the plan,
+  // door-sized ones become open doorways and wider ones are left open from floor to ceiling.
+  const boundaries: { a: Vec2; b: Vec2 }[] = [];
+  const maxOpen = opts.maxOpen ?? opts.maxPassage;
   for (let guard = 0; guard < 200; guard++) {
-    const gap = findGap(walls, opts);
+    const gap = findGap(walls, opts, Math.max(2.6, maxOpen));
     if (!gap) break;
-    if (gap.width <= opts.maxPassage) {
+    const outside = maxOpen > opts.maxPassage && gapIsOutside(walls, gap);
+    if (outside && gap.width <= maxOpen) {
+      commit(gap.host, gap.width, 'window', { sill: 0, fullHeight: true });
+      warnings.push(`A ${gap.width.toFixed(2)} m gap in an outside wall near ${fmt(gap.center)} has no door or window; it was glazed.`);
+    } else if (gap.width <= opts.maxPassage) {
       commit(gap.host, gap.width, 'door', { style: 'passage' });
       warnings.push(`A ${gap.width.toFixed(2)} m gap in a wall near ${fmt(gap.center)} has no door or window; it was treated as an open doorway.`);
+    } else if (gap.width <= maxOpen) {
+      boundaries.push({ a: gap.ends[0], b: gap.ends[1] });
+      warnings.push(`A ${gap.width.toFixed(2)} m gap in a wall near ${fmt(gap.center)} was left open as part of an open plan.`);
+      gap.skip.add(gap.key);
     } else {
       warnings.push(`A ${gap.width.toFixed(2)} m gap in a wall near ${fmt(gap.center)} was left open.`);
       gap.skip.add(gap.key);
     }
   }
-  return { walls, openings: placed.map((p) => p.open), warnings };
+  return { walls, openings: placed.map((p) => p.open), warnings, boundaries };
+}
+
+/** A gap is in an outside wall when, on one side, rays fanning out from it reach no other wall. */
+function gapIsOutside(walls: WallPiece[], gap: { center: Vec2; host: Host; width: number; pieces: [WallPiece, WallPiece] }): boolean {
+  const n = gap.host.nrm;
+  const t = Math.max(gap.pieces[0].thickness, gap.pieces[1].thickness);
+  for (const side of [1, -1]) {
+    const origin = add(gap.center, scale(n, side * (t / 2 + 0.05)));
+    const free = [-25, 0, 25].every((deg) => {
+      const a = (deg * Math.PI) / 180;
+      const r0 = scale(n, side);
+      const r = { x: r0.x * Math.cos(a) - r0.y * Math.sin(a), y: r0.x * Math.sin(a) + r0.y * Math.cos(a) };
+      return !walls.some((w) => {
+        if (w === gap.pieces[0] || w === gap.pieces[1]) return false;
+        const s = sub(w.b, w.a);
+        const den = cross(r, s);
+        if (Math.abs(den) < 1e-12) return false;
+        const qp = sub(w.a, origin);
+        const tt = cross(qp, s) / den;
+        const u = cross(qp, r) / den;
+        return tt > 0 && u >= -0.01 && u <= 1.01;
+      });
+    });
+    if (free) return true;
+  }
+  return false;
 }
 
 const skipped = new Set<string>();
 
-function findGap(walls: WallPiece[], opts: OpeningOptions): { host: Host; width: number; center: Vec2; key: string; skip: Set<string> } | null {
+function findGap(
+  walls: WallPiece[],
+  opts: OpeningOptions,
+  maxWidth: number,
+): { host: Host; width: number; center: Vec2; key: string; skip: Set<string>; pieces: [WallPiece, WallPiece]; ends: [Vec2, Vec2] } | null {
   for (let i = 0; i < walls.length; i++) {
     const A = walls[i];
     const dA = normalize(sub(A.b, A.a));
@@ -252,17 +327,27 @@ function findGap(walls: WallPiece[], opts: OpeningOptions): { host: Host; width:
       const aHi = Math.max(dot(sub(A.a, A.a), dA), dot(sub(A.b, A.a), dA));
       const bLo = Math.min(dot(sub(B.a, A.a), dA), dot(sub(B.b, A.a), dA));
       const g = bLo - aHi;
-      if (g <= opts.minGap || g > 2.6) continue;
+      if (g <= opts.minGap || g > maxWidth) continue;
       const center = add(A.a, scale(dA, aHi + g / 2));
       const key = `${center.x.toFixed(2)},${center.y.toFixed(2)}`;
       if (skipped.has(key)) continue;
-      // Something else (a perpendicular wall) crossing the gap means it is a junction, not a gap.
-      const crossing = walls.some((w) => w !== A && w !== B && segCross(w, center, dA, g));
+      // Something else crossing the gap (a perpendicular wall) or filling it (a column on the same
+      // line) means it is a junction, not a gap.
+      const filled = (w: WallPiece) => {
+        if (Math.abs(cross(normalize(sub(w.b, w.a)), dA)) > PAR) return false;
+        if (Math.abs(dot(sub(w.a, A.a), nA)) > (w.thickness + A.thickness) / 2) return false;
+        const u0 = Math.min(dot(sub(w.a, A.a), dA), dot(sub(w.b, A.a), dA));
+        const u1 = Math.max(dot(sub(w.a, A.a), dA), dot(sub(w.b, A.a), dA));
+        return u0 <= aHi + 0.05 && u1 >= bLo - 0.05;
+      };
+      const crossing = walls.some((w) => w !== A && w !== B && (segCross(w, center, dA, g) || filled(w)));
       if (crossing) {
         skipped.add(key);
         continue;
       }
-      return { host: { wall: A, dir: dA, nrm: nA, u: aHi + g / 2, perpDist: 0 }, width: g, center, key, skip: skipped };
+      const aEnd = dot(sub(A.b, A.a), dA) > dot(sub(A.a, A.a), dA) ? A.b : A.a;
+      const bEnd = dot(sub(B.a, A.a), dA) < dot(sub(B.b, A.a), dA) ? B.a : B.b;
+      return { host: { wall: A, dir: dA, nrm: nA, u: aHi + g / 2, perpDist: 0 }, width: g, center, key, skip: skipped, pieces: [A, B], ends: [aEnd, bEnd] };
     }
   }
   return null;

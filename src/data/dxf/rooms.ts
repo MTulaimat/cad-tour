@@ -28,6 +28,33 @@ export interface DetectedRoom {
   labels: string[];
 }
 
+/**
+ * Short links from wall ends that stop against a thicker wall or a column (so their centerlines
+ * don't meet) to that wall's centerline, so the rooms on both sides close there.
+ */
+export function wallEndLinks(walls: { a: Vec2; b: Vec2; thickness: number }[], tol: number, boundaries: Seg[] = []): Seg[] {
+  const out: Seg[] = [];
+  const closest = (p: Vec2, o: Seg) => lerp2(o.a, o.b, closestT(p, o.a, o.b));
+  // Room boundary lines (railings, open-plan lines) often stop at a wall's face too.
+  const all = [...walls, ...boundaries.map((b) => ({ ...b, thickness: 0 }))];
+  for (const w of all) {
+    // A wall end touching anything is joined; a boundary line must reach a wall itself.
+    const joinedTo = w.thickness > 0 ? all : walls;
+    for (const p of [w.a, w.b]) {
+      if (joinedTo.some((o) => o !== w && dist(p, closest(p, o)) <= tol)) continue;
+      let best: { q: Vec2; d: number } | null = null;
+      for (const o of walls) {
+        if (o === w) continue;
+        const q = closest(p, o);
+        const d = dist(p, q);
+        if (d <= o.thickness / 2 + w.thickness / 2 + 0.1 && (!best || d < best.d)) best = { q, d };
+      }
+      if (best) out.push({ a: p, b: best.q });
+    }
+  }
+  return out;
+}
+
 /** Splits segments at their mutual intersections and T touches. */
 export function splitSegments(segs: Seg[], tol: number): Seg[] {
   const cuts: number[][] = segs.map(() => [0, 1]);
@@ -77,6 +104,20 @@ export function splitSegments(segs: Seg[], tol: number): Seg[] {
 
 /** Bounded faces of the segment arrangement, counterclockwise. */
 export function findFaces(segsIn: Seg[], tol: number, minArea = 1.0): Vec2[][] {
+  return traceFaces(segsIn, tol)
+    .filter((f) => signedArea(f) > minArea)
+    .map((f) => simplify(f, tol));
+}
+
+/** Outer boundary of the segment arrangement (its largest clockwise face), counterclockwise. */
+export function outerOutline(segsIn: Seg[], tol: number): Vec2[] | null {
+  const faces = traceFaces(segsIn, tol).filter((f) => signedArea(f) < -1);
+  if (faces.length === 0) return null;
+  faces.sort((a, b) => signedArea(a) - signedArea(b));
+  return simplify(faces[0].slice().reverse(), tol);
+}
+
+function traceFaces(segsIn: Seg[], tol: number): Vec2[][] {
   const segs = splitSegments(segsIn, tol);
   // Nodes by snapping.
   const nodes: Vec2[] = [];
@@ -134,10 +175,10 @@ export function findFaces(segsIn: Seg[], tol: number, minArea = 1.0): Vec2[][] {
         b = c;
         if (a === u && b === v) break;
       }
-      if (poly.length >= 3 && signedArea(poly) > minArea) faces.push(poly);
+      if (poly.length >= 3) faces.push(poly);
     }
   }
-  return faces.map((f) => simplify(f, tol));
+  return faces;
 }
 
 /** Drops collinear points and spikes. */
@@ -165,6 +206,11 @@ function simplify(poly: Vec2[], tol: number): Vec2[] {
 // ---- naming and materials -------------------------------------------------------------------
 
 const AREA_TEXT = /^[\d\s.,]+(m²|m2|sqm|sq\.?\s?m|m\^2|م²|م2|م\.م)?$/i;
+/** Level marks and dimensions (+2.75, -0.15, 510): never room names. */
+export const LEVEL_TEXT = /^[+\-±]?\s*\d+([.,]\d+)?$/;
+
+/** Texts that can name a room. */
+export const isNameText = (t: string): boolean => !!t && !AREA_TEXT.test(t) && !LEVEL_TEXT.test(t.trim()) && t.length <= 48;
 
 const MATERIAL_RULES: { key: FloorMaterialKey; outdoor?: boolean; words: RegExp[] }[] = [
   { key: 'concrete', outdoor: true, words: [/balcon/i, /terrace/i, /\bdeck\b/i, /loggia/i, /patio/i, /شرفة/, /بلكون/, /بلكونة/, /تراس/, /شرفه/] },
@@ -180,7 +226,7 @@ export function materialFor(name: string): { floorMaterial: FloorMaterialKey; ou
 
 /** Assigns names from labels: inside the room first (largest text, then nearest the centre). */
 export function nameRooms(polys: Vec2[][], labels: Label[]): DetectedRoom[] {
-  const usable = labels.filter((l) => l.text && !AREA_TEXT.test(l.text) && l.text.length <= 48);
+  const usable = labels.filter((l) => isNameText(l.text));
   let n = 0;
   return polys.map((polygon) => {
     const inside = usable.filter((l) => pointInPolygon(l.p, polygon));
@@ -189,11 +235,11 @@ export function nameRooms(polys: Vec2[][], labels: Label[]): DetectedRoom[] {
       const c = polygonCentroid(polygon);
       label = inside.slice().sort((a, b) => b.height - a.height || dist(a.p, c) - dist(b.p, c))[0];
     } else {
-      // Nearest label within half a metre of the outline.
+      // Nearest label within half a metre of the outline that doesn't name another room.
       let best = 0.5;
       for (const l of usable) {
         const d = distanceToPolygonEdges(l.p, polygon);
-        if (d < best && !pointInPolygon(l.p, polygon)) {
+        if (d < best && !pointInPolygon(l.p, polygon) && !polys.some((o) => o !== polygon && pointInPolygon(l.p, o))) {
           best = d;
           label = l;
         }

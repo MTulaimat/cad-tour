@@ -1,9 +1,9 @@
 import type { FloorPlan } from '../schema';
 import { polygonArea } from '../../util/math2d';
-import type { ImportReport, ReportWarning } from './types';
+import type { ImportReport, ReportWarning, RoomKind } from './types';
 
-/** The validation report shown before "Build scene": counts, total area and every warning. */
-export function buildReport(plan: FloorPlan, warnings: ReportWarning[], counts: { doors: number; windows: number; furniture: number }): ImportReport {
+/** The validation report shown before "Build scene": counts, total area, notes and every warning. */
+export function buildReport(plan: FloorPlan, warnings: ReportWarning[], counts: { doors: number; windows: number; furniture: number }, notes: string[] = []): ImportReport {
   const roomList = plan.floors.flatMap((f) =>
     f.rooms.map((r) => ({
       id: r.id,
@@ -12,6 +12,8 @@ export function buildReport(plan: FloorPlan, warnings: ReportWarning[], counts: 
       area: polygonArea(r.polygon),
       floorMaterial: r.floorMaterial,
       named: !/^Room \d+$/.test(r.name),
+      kind: (r.glazed ? 'glass-balcony' : r.outdoor ? 'open-balcony' : 'room') as RoomKind,
+      ceilingHeight: r.ceilingHeight ?? f.ceilingHeight,
     })),
   );
   // De-duplicate repeated messages.
@@ -27,6 +29,7 @@ export function buildReport(plan: FloorPlan, warnings: ReportWarning[], counts: 
     furniture: counts.furniture,
     totalArea: roomList.reduce((a, r) => a + r.area, 0),
     warnings: uniq,
+    notes,
     roomList,
   };
 }

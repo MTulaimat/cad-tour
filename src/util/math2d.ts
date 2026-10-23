@@ -232,3 +232,55 @@ export function orientedRect(c: Vec2, w: number, d: number, yaw: number): Vec2[]
   const hd = d / 2;
   return [v2(-hw, -hd), v2(hw, -hd), v2(hw, hd), v2(-hw, hd)].map((p) => add(c, rotate(p, yaw)));
 }
+
+/** Convex hull (Andrew's monotone chain), counterclockwise, without repeated points. */
+export function convexHull(points: readonly Vec2[]): Vec2[] {
+  const pts = points.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  if (pts.length < 3) return pts;
+  const half = (list: Vec2[]) => {
+    const out: Vec2[] = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(sub(out[out.length - 1], out[out.length - 2]), sub(p, out[out.length - 2])) <= 1e-12) out.pop();
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half(pts.slice().reverse())];
+}
+
+/**
+ * Smallest-area rectangle around a point set (rotating calipers over the hull edges).
+ * `corners` are counterclockwise starting at the minimum corner of the rectangle's own frame,
+ * `dir` is the direction of the first side (length `w`), `d` the other side.
+ */
+export function minAreaRect(points: readonly Vec2[]): { corners: Vec2[]; dir: Vec2; w: number; d: number; center: Vec2 } | null {
+  const hull = convexHull(points);
+  if (hull.length < 2) return null;
+  let best: { area: number; dir: Vec2; u0: number; u1: number; v0: number; v1: number } | null = null;
+  for (let i = 0; i < hull.length; i++) {
+    const e = sub(hull[(i + 1) % hull.length], hull[i]);
+    if (len(e) < 1e-6) continue;
+    const dir = normalize(e);
+    const n = perp(dir);
+    let u0 = Infinity;
+    let u1 = -Infinity;
+    let v0 = Infinity;
+    let v1 = -Infinity;
+    for (const p of hull) {
+      const u = dot(p, dir);
+      const v = dot(p, n);
+      u0 = Math.min(u0, u);
+      u1 = Math.max(u1, u);
+      v0 = Math.min(v0, v);
+      v1 = Math.max(v1, v);
+    }
+    const area = (u1 - u0) * Math.max(v1 - v0, 1e-9);
+    if (!best || area < best.area - 1e-12) best = { area, dir, u0, u1, v0, v1 };
+  }
+  if (!best) return null;
+  const { dir, u0, u1, v0, v1 } = best;
+  const n = perp(dir);
+  const P = (u: number, v: number) => add(scale(dir, u), scale(n, v));
+  return { corners: [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)], dir, w: u1 - u0, d: v1 - v0, center: P((u0 + u1) / 2, (v0 + v1) / 2) };
+}

@@ -11,7 +11,7 @@ const RULES: { role: LayerRole; words: RegExp[] }[] = [
   { role: 'windows', words: [/win/, /window/, /glaz/, /\bwdw\b/, /نافذة/, /نوافذ/, /شباك/, /شبابيك/] },
   { role: 'doors', words: [/door/, /\bdr\b/, /\bdoor/, /باب/, /أبواب/, /ابواب/] },
   { role: 'stairs', words: [/stair/, /strs/, /\bstr\b/, /step/, /درج/, /سلم/, /سلالم/] },
-  { role: 'furniture', words: [/furn/, /fixt/, /equip/, /sanit/, /plumb/, /kitchen/, /appl/, /أثاث/, /اثاث/, /فرش/, /مفروشات/] },
+  { role: 'furniture', words: [/furn/, /fixt/, /equip/, /equp/, /eqpm/, /sanit/, /plumb/, /kitchen/, /appl/, /أثاث/, /اثاث/, /فرش/, /مفروشات/] },
   { role: 'rooms', words: [/room/, /area/, /space/, /label/, /name/, /text/, /\btxt\b/, /iden/, /zone/, /balc/, /rail/, /غرف/, /اسماء/, /أسماء/, /مساحات/, /نصوص/] },
   { role: 'walls', words: [/wall/, /\bmur/, /\bwal\b/, /partition/, /column/, /\bcol\b/, /جدار/, /جدران/, /حوائط/, /حائط/, /اعمدة/, /أعمدة/] },
 ];

@@ -2,6 +2,7 @@ import DxfParser from 'dxf-parser';
 import Hatch, { type HatchEntity } from './hatch';
 import { cleanMText, cleanText, decodeDxf } from './encoding';
 import type { DArc, DInsert, DPoint, DPoly, DrawingModel, DSeg, DText, LayerInfo } from './types';
+import { minAreaRect } from '../../util/math2d';
 
 /**
  * Reads a DXF file into a flat drawing model: every LINE, LWPOLYLINE, POLYLINE, ARC, CIRCLE, TEXT,
@@ -72,6 +73,43 @@ const ocsMirror = (e: AnyEntity): boolean => {
 
 type Parsed = NonNullable<ReturnType<DxfParser['parseSync']>>;
 
+/** Linetype names whose pattern has gaps (dashed, hidden, center lines), lower case. */
+function brokenLinetypes(dxf: Parsed): Set<string> {
+  const out = new Set<string>();
+  const table = (dxf.tables as unknown as { lineType?: { lineTypes?: Record<string, { name?: string; pattern?: number[] }> } })?.lineType?.lineTypes ?? {};
+  for (const [name, lt] of Object.entries(table)) {
+    if ((lt.pattern ?? []).some((v) => v < 0)) out.add(name.toLowerCase());
+  }
+  return out;
+}
+
+const BROKEN_NAME = /dash|hidden|dot|center|centre|phantom|divide/i;
+
+/** Linetype per layer from the LAYER table (dxf-parser skips group 6 there). */
+function layerLinetypes(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const lines = text.split(/\r\n|\r|\n/);
+  let inLayers = false;
+  let name: string | null = null;
+  for (let i = 0; i + 1 < lines.length; i += 2) {
+    const code = lines[i].trim();
+    const value = lines[i + 1].trim();
+    if (code === '0' && value === 'ENDTAB') {
+      if (inLayers) break;
+      continue;
+    }
+    if (code === '2' && !inLayers && lines[i - 2]?.trim() === '0' && lines[i - 1]?.trim() === 'TABLE' && value === 'LAYER') {
+      inLayers = true;
+      continue;
+    }
+    if (!inLayers) continue;
+    if (code === '0') name = null;
+    else if (code === '2') name = value;
+    else if (code === '6' && name !== null) out.set(name, value);
+  }
+  return out;
+}
+
 export function parseDxfText(text: string): { dxf: Parsed } {
   const parser = new DxfParser();
   parser.registerEntityHandler(Hatch as never);
@@ -115,21 +153,32 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
   };
   let skippedPaper = 0;
   let skippedOther = 0;
+  const broken = brokenLinetypes(dxf);
+  const layerLt = layerLinetypes(decoded.text);
+  const isBroken = (lt: string | undefined) => !!lt && (broken.has(lt.toLowerCase()) || BROKEN_NAME.test(lt));
+  // Drawn points of each top-level insert, for its footprint.
+  const itemPoints: DPoint[][] = [];
+  const track = (insert: number, ...pts: DPoint[]) => {
+    if (insert < 0) return;
+    (itemPoints[insert] ??= []).push(...pts);
+  };
 
-  const pushPoly = (pts: DPoint[], closed: boolean, layer: string, insert: number, source: DPoly['source']) => {
+  const pushPoly = (pts: DPoint[], closed: boolean, layer: string, insert: number, source: DPoly['source'], extra: { dashed?: boolean; solid?: boolean; pattern?: string } = {}) => {
     if (pts.length < 2) return;
+    track(insert, ...pts);
     const pi = closed && pts.length >= 3 ? polys.length : -1;
-    if (pi >= 0) polys.push({ points: pts, closed: true, layer, insert, source });
+    const fill = source === 'hatch' ? { solid: !!extra.solid, ...(extra.pattern ? { pattern: extra.pattern } : {}) } : {};
+    if (pi >= 0) polys.push({ points: pts, closed: true, layer, insert, source, ...fill });
     else if (source === 'polyline' && pts.length > 2) polys.push({ points: pts, closed: false, layer, insert, source });
     const n = closed ? pts.length : pts.length - 1;
     for (let i = 0; i < n; i++) {
       const a = pts[i];
       const b = pts[(i + 1) % pts.length];
-      if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-9) segs.push({ a, b, layer, insert, poly: pi });
+      if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-9) segs.push({ a, b, layer, insert, poly: pi, ...(extra.dashed ? { dashed: true } : {}) });
     }
   };
 
-  const emit = (e: AnyEntity, m: Mat, inheritLayer: string | null, insert: number, depth: number) => {
+  const emit = (e: AnyEntity, m: Mat, inheritLayer: string | null, insert: number, depth: number, blockDashed = false) => {
     if (e.inPaperSpace) {
       skippedPaper++;
       return;
@@ -137,14 +186,38 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
     const own = (e.layer as string) ?? '0';
     const layer = inheritLayer && own === '0' ? inheritLayer : own;
     const mm = ocsMirror(e) && e.type !== 'LINE' ? mul(m, MIRROR_X) : m;
+    const lt = typeof e.lineType === 'string' ? e.lineType.trim() : '';
+    const dashed = /^byblock$/i.test(lt) ? blockDashed : !lt || /^bylayer$/i.test(lt) ? isBroken(layerLt.get(layer)) : isBroken(lt);
     switch (e.type) {
       case 'LINE': {
         const v = e.vertices as { x: number; y: number }[] | undefined;
         if (v && v.length >= 2) {
           const a = apply(m, v[0]);
           const b = apply(m, v[1]);
-          if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-9) segs.push({ a, b, layer, insert, poly: -1 });
+          if (Math.hypot(b.x - a.x, b.y - a.y) > 1e-9) {
+            segs.push({ a, b, layer, insert, poly: -1, ...(dashed ? { dashed: true } : {}) });
+            track(insert, a, b);
+          }
         }
+        break;
+      }
+      case 'ELLIPSE': {
+        const c = e.center as { x: number; y: number } | undefined;
+        const maj = e.majorAxisEndPoint as { x: number; y: number } | undefined;
+        const ratio = (e.axisRatio as number) ?? 1;
+        if (!c || !maj) break;
+        let t0 = (e.startAngle as number) ?? 0;
+        let t1 = (e.endAngle as number) ?? Math.PI * 2;
+        while (t1 <= t0) t1 += Math.PI * 2;
+        const full = t1 - t0 > Math.PI * 2 - 1e-6;
+        const n = Math.max(8, Math.ceil(((t1 - t0) / (Math.PI * 2)) * 32));
+        const minor = { x: -maj.y * ratio, y: maj.x * ratio };
+        const pts: DPoint[] = [];
+        for (let i = 0; i <= (full ? n - 1 : n); i++) {
+          const t = t0 + ((t1 - t0) * i) / n;
+          pts.push(apply(mm, { x: c.x + maj.x * Math.cos(t) + minor.x * Math.sin(t), y: c.y + maj.y * Math.cos(t) + minor.y * Math.sin(t) }));
+        }
+        pushPoly(pts, full, layer, insert, 'polyline', { dashed });
         break;
       }
       case 'LWPOLYLINE':
@@ -160,7 +233,7 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
           for (const q of bulgePoints(p0, p1, p0.bulge ?? 0)) pts.push(apply(mm, q));
         }
         if (closed) pts.pop();
-        pushPoly(pts, closed, layer, insert, 'polyline');
+        pushPoly(pts, closed, layer, insert, 'polyline', { dashed });
         break;
       }
       case 'ARC':
@@ -178,7 +251,17 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
           // A mirror reverses the sweep; mirror angles about the x axis first.
           [a0, a1] = [-a1, -a0];
         }
-        arcs.push({ c: apply(mm, c), r: r * sx, a0: a0 + rot, a1: a1 + rot, layer, insert });
+        const arc: DArc = { c: apply(mm, c), r: r * sx, a0: a0 + rot, a1: a1 + rot, layer, insert };
+        arcs.push(arc);
+        if (insert >= 0) {
+          let sweep = arc.a1 - arc.a0;
+          while (sweep <= 0) sweep += Math.PI * 2;
+          const n = Math.max(2, Math.ceil(sweep / (Math.PI / 8)));
+          for (let i = 0; i <= n; i++) {
+            const t = arc.a0 + (sweep * i) / n;
+            track(insert, { x: arc.c.x + Math.cos(t) * arc.r, y: arc.c.y + Math.sin(t) * arc.r });
+          }
+        }
         break;
       }
       case 'TEXT':
@@ -195,7 +278,8 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
         break;
       }
       case 'HATCH': {
-        for (const loop of (e as unknown as HatchEntity).loops) {
+        const h = e as unknown as HatchEntity;
+        for (const loop of h.loops) {
           const pts: DPoint[] = [];
           for (let i = 0; i < loop.points.length; i++) {
             const p = loop.points[i];
@@ -204,7 +288,8 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
             if (i < loop.points.length - 1 || loop.closed) for (const r of bulgePoints(p, q, p.bulge ?? 0)) pts.push(apply(mm, r));
           }
           if (loop.closed && pts.length > 3) pts.pop();
-          pushPoly(pts, true, layer, insert, 'hatch');
+          // A hatch without the fill flag or pattern name (older writers) counts as solid.
+          pushPoly(pts, true, layer, insert, 'hatch', { solid: h.solid ?? (!h.pattern || /^solid$/i.test(h.pattern)), pattern: h.pattern });
         }
         break;
       }
@@ -249,7 +334,7 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
             size: lb ? { w: (lb.maxX - lb.minX) * Math.abs(sx), d: (lb.maxY - lb.minY) * Math.abs(sy) } : { w: 0, d: 0 },
           });
         }
-        for (const child of block.entities ?? []) emit(child, mi, layer, idx, depth + 1);
+        for (const child of block.entities ?? []) emit(child, mi, layer, idx, depth + 1, dashed);
         break;
       }
       case 'DIMENSION':
@@ -271,6 +356,11 @@ export function readDrawing(bytes: Uint8Array, onProgress: (f: number) => void =
     if (i % 2000 === 0) onProgress(0.55 + (0.4 * i) / Math.max(1, entities.length));
   });
   if (skippedPaper > 0) warnings.push(`${skippedPaper} paper space entities were ignored.`);
+  inserts.forEach((ins, i) => {
+    const pts = itemPoints[i];
+    const r = pts && pts.length >= 3 ? minAreaRect(pts) : null;
+    if (r && r.w > 1e-6 && r.d > 1e-6) ins.footprint = r.corners;
+  });
 
   const b = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   const grow = (p: DPoint) => {

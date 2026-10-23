@@ -25,6 +25,10 @@ export interface HatchEntity {
   inPaperSpace?: boolean;
   loops: HatchLoop[];
   extrusionDirectionZ?: number;
+  /** Pattern name (group 2), for example SOLID or ANSI37. */
+  pattern?: string;
+  /** Solid fill flag (group 70). Solid hatches are filled shapes; patterned ones mark a surface. */
+  solid?: boolean;
 }
 
 const num = (g: Group) => Number(g.value);
@@ -60,6 +64,8 @@ export default class Hatch {
       if (curr.code === 8) entity.layer = String(curr.value);
       else if (curr.code === 67) entity.inPaperSpace = Number(curr.value) !== 0;
       else if (curr.code === 230) entity.extrusionDirectionZ = num(curr);
+      else if (curr.code === 2 && pathsLeft < 0 && entity.pattern === undefined) entity.pattern = String(curr.value).trim();
+      else if (curr.code === 70 && pathsLeft < 0 && entity.solid === undefined) entity.solid = num(curr) === 1;
       else if (curr.code === 91 && pathsLeft < 0) pathsLeft = num(curr);
       else if (curr.code === 92 && pathsLeft > 0) {
         pathsLeft--;
