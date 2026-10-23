@@ -4,7 +4,7 @@ import { subtractConvex } from '../util/clip';
 import { traceFaces } from '../util/arrangement';
 import { add, bounds, dist, interiorPoint, normalize, perp, pointInPolygon, scale, signedArea, sub } from '../util/math2d';
 import { stairInfos } from '../plan/stairs';
-import { floorAbove, roomTop } from '../plan/levels';
+import { buildingTop, floorAbove, roomTop } from '../plan/levels';
 import { wallSegments } from '../plan/walls';
 import { type BuilderSet, W } from './builder';
 
@@ -127,6 +127,8 @@ export function buildCeilings(plan: FloorPlan, floor: Floor, sets: BuilderSet): 
   const slab = above ? above.elevation - above.slabThickness : Infinity;
   // A plain stack of floors: every ceiling is the slab above, cut where stairs go up.
   const split = !!above && floor.rooms.some((r) => !r.outdoor && roomTop(floor, r) > slab + 0.01);
+  const roof = buildingTop(plan);
+  const top = sets.get('wall-interior');
   for (const room of floor.rooms) {
     if (room.outdoor) continue;
     const h = E + (room.ceilingHeight ?? floor.ceilingHeight);
@@ -135,8 +137,29 @@ export function buildCeilings(plan: FloorPlan, floor: Floor, sets: BuilderSet): 
       continue;
     }
     for (const part of ceilingParts(room, h, cover, slab)) {
-      // Stairs pass through the slab only; over a double-height space the ceiling is the roof.
-      for (const piece of cutOpenings(part.poly, part.underSlab ? openings : [])) b.polygon(piece.outer, part.y, false, piece.holes);
+      if (part.underSlab || part.y >= roof - 0.01) {
+        // Stairs pass through the slab; a double-height space's ceiling is the roof.
+        for (const piece of cutOpenings(part.poly, part.underSlab ? openings : [])) b.polygon(piece.outer, part.y, false, piece.holes);
+        continue;
+      }
+      // A lower ceiling with nothing of the floor above over it stands inside the double-height
+      // space: a slab with a top and edges, cut where a stair climbs through it, under the roof.
+      const t = above.slabThickness;
+      for (const piece of cutOpenings(part.poly, openings)) {
+        b.polygon(piece.outer, part.y, false, piece.holes);
+        top.polygon(piece.outer, part.y + t, true, piece.holes);
+        for (const ring of [piece.outer, ...piece.holes]) {
+          const ccw = signedArea(ring) > 0 === (ring === piece.outer);
+          for (let i = 0; i < ring.length; i++) {
+            const a = ring[i];
+            const c = ring[(i + 1) % ring.length];
+            if (dist(a, c) < 1e-3) continue;
+            if (ccw) top.quadAuto(W(a, part.y), W(c, part.y), W(c, part.y + t), W(a, part.y + t));
+            else top.quadAuto(W(c, part.y), W(a, part.y), W(a, part.y + t), W(c, part.y + t));
+          }
+        }
+      }
+      b.polygon(part.poly, roof, false);
     }
   }
   // Stairwell edges: the slab thickness around the opening, facing into it, where there is slab.

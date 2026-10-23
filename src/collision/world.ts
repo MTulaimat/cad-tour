@@ -210,12 +210,14 @@ export class CollisionWorld {
     return floorH ?? current;
   }
 
-  /** True when p is over a stair flight at roughly this height. */
+  /** True when p is over a stair flight or landing at roughly this height. */
   onStair(p: Vec2, current: number): boolean {
-    return this.flights.some((f) => {
+    const onFlight = this.flights.some((f) => {
       const h = flightHeightAt(f, p);
       return h !== null && Math.abs(h - current) < 0.6;
     });
+    // Landings between flights count as the stair too.
+    return onFlight || this.landings.some((l) => Math.abs(l.elevation - current) < 0.3 && pointInPolygon(p, l.polygon));
   }
 }
 

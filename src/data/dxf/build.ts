@@ -556,7 +556,6 @@ export function buildPlan(model: DrawingModel, req: BuildRequest): BuildResult {
       ...(k > 0 ? runs.flatMap((r) => edges(r.outline)) : []),
     ];
     const roomSegs = [...op.walls.map((w) => ({ a: w.a, b: w.b })), ...wallEndLinks(op.walls, tol, boundaries), ...boundaries];
-    (globalThis as { __roomSegs?: (k: number, s: Seg[]) => void }).__roomSegs?.(k, roomSegs);
     const detected = detectRooms(roomSegs, b.labels.map((l) => ({ ...l, p: T(l.p) })), tol).filter(
       (r) => !(k > 0 && stairOutlines.some((so) => pointInPolygon(polygonCentroid(r.polygon), so) && polygonArea(r.polygon) <= polygonArea(so) * 1.05)),
     );
@@ -884,13 +883,18 @@ export function buildPlan(model: DrawingModel, req: BuildRequest): BuildResult {
       const d = normalize(sub(c, a));
       const nrm = perp(d);
       const len = dist(a, c);
+      // An outside wall rises with its room. Between two rooms a wall stops at the lower ceiling:
+      // above it the floor over the lower room (or the open space under the roof) carries on.
       let h = 0;
       for (let i = 0; i < 5; i++) {
         const p = add(a, scale(d, (len * (i + 0.5)) / 5));
-        for (const side of [1, -1]) {
+        const tops = [1, -1].map((side) => {
           const q = add(p, scale(nrm, side * (wall.thickness / 2 + 0.15)));
-          for (const r of indoor) if (pointInPolygon(q, r.polygon)) h = Math.max(h, r.ceilingHeight ?? f.ceilingHeight);
-        }
+          const r = indoor.find((x) => pointInPolygon(q, x.polygon));
+          return r ? (r.ceilingHeight ?? f.ceilingHeight) : null;
+        });
+        const known = tops.filter((t): t is number => t !== null);
+        if (known.length) h = Math.max(h, Math.min(...known));
       }
       wall.height = h > 0 ? h : f.ceilingHeight;
     }
