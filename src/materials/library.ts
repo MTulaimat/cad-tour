@@ -40,6 +40,8 @@ export const SPECS: Record<MaterialKey, Spec> = {
   'stair-paint': { color: '#f3f1ed', roughness: 0.5 },
   'metal-brushed': { color: '#c9cbcd', roughness: 0.32, metalness: 1 },
   'metal-dark': { color: '#2c2d2f', roughness: 0.45, metalness: 0.6 },
+  // Matte black powder-coated steel (stairs and railings).
+  'steel-black': { color: '#1c1d1f', roughness: 0.62, metalness: 0.35 },
   chrome: { color: '#e8e9ea', roughness: 0.08, metalness: 1 },
   fabric: { color: '#c5c5c3', roughness: 0.95, texture: 'fabric' },
   'fabric-accent': { color: '#8f9b93', roughness: 0.95, texture: 'fabric' },

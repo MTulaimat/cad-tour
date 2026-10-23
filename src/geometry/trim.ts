@@ -1,6 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
-import type { Floor, FloorPlan } from '../data/schema';
+import type { Floor, FloorPlan, Room, Vec2 } from '../data/schema';
 import { angleOf, pointInPolygon } from '../util/math2d';
+import { floorAbove, roomTop } from '../plan/levels';
 import { faceRange, segmentPoint, wallSegments, type WallSegment } from '../plan/walls';
 import { stairInfos } from '../plan/stairs';
 import { type BuilderSet, W } from './builder';
@@ -44,10 +45,23 @@ export function buildTrim(plan: FloorPlan, floor: Floor, sets: BuilderSet): void
   const overStair = (p: { x: number; y: number }) => stairs.some((s) => pointInPolygon(p, s.stair.outline));
   const skirting = sets.get('skirting');
   const cornice = sets.get('trim');
+  // The ceiling over a point beside a wall: its room's ceiling, or the slab of the floor above
+  // where that floor's rooms are over it.
+  const floorOf = new Map<Room, Floor>(plan.floors.flatMap((f) => f.rooms.map((r) => [r, f] as const)));
+  const ceilingAt = (room: Room | null, p: Vec2): number | null => {
+    if (!room) return null;
+    const f = floorOf.get(room) ?? floor;
+    const top = roomTop(f, room);
+    const up = floorAbove(plan, f);
+    if (up && up.elevation - up.slabThickness < top - 0.01 && up.rooms.some((r) => !r.outdoor && pointInPolygon(p, r.polygon))) return up.elevation - up.slabThickness;
+    return top;
+  };
   for (const s of wallSegments(plan, floor)) {
     for (const side of [1, -1]) {
       const exterior = side > 0 ? s.leftExterior : s.rightExterior;
-      if (exterior) continue;
+      if (exterior || s.glazed) continue;
+      const down = side > 0 ? s.leftDown : s.rightDown;
+      const room = side > 0 ? s.leftRoom : s.rightRoom;
       const [fu0, fu1] = faceRange(s, side > 0);
       const u0 = Math.min(fu0, fu1);
       const u1 = Math.max(fu0, fu1);
@@ -64,9 +78,18 @@ export function buildTrim(plan: FloorPlan, floor: Floor, sets: BuilderSet): void
         cur = Math.max(cur, g1);
       }
       if (cur < u1) pieces.push([cur, u1]);
-      for (const [pa, pb] of pieces) for (const [a, b] of runs(pa, pb, (u) => !overStair(probe(u)))) strip(skirting, s, a, b, side, E, SKIRT_H, SKIRT_D);
-      const top = E + s.height - TRIM_H;
-      for (const [a, b] of runs(u0, u1, (u) => !overStair(probe(u)))) strip(cornice, s, a, b, side, top, TRIM_H, TRIM_D);
+      // A face that runs down into a double-height space below has no floor beside it.
+      if (!down) for (const [pa, pb] of pieces) for (const [a, b] of runs(pa, pb, (u) => !overStair(probe(u)))) strip(skirting, s, a, b, side, E, SKIRT_H, SKIRT_D);
+      for (const iv of s.tops) {
+        const a0 = Math.max(u0, iv.u0);
+        const b0 = Math.min(u1, iv.u1);
+        if (b0 - a0 < 0.02) continue;
+        const meets = (u: number) => {
+          const c = ceilingAt(room, probe(u));
+          return c === null ? iv.y <= E + floor.ceilingHeight + 0.01 : Math.abs(c - iv.y) < 0.02;
+        };
+        for (const [a, b] of runs(a0, b0, (u) => !overStair(probe(u)) && meets(u))) strip(cornice, s, a, b, side, iv.y - TRIM_H, TRIM_H, TRIM_D);
+      }
     }
   }
 }

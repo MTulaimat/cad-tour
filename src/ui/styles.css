@@ -1086,7 +1086,7 @@ select option {
 .room-row {
   display: grid;
   /* A fixed middle column keeps the name fields one width. */
-  grid-template-columns: minmax(0, 1fr) 11rem minmax(7rem, 9rem);
+  grid-template-columns: minmax(0, 1fr) 11rem minmax(7rem, 9.5rem) minmax(7rem, 9rem);
   gap: 0.5rem;
   align-items: center;
 }
@@ -1135,7 +1135,10 @@ select option {
     grid-column: 1 / -1;
   }
   .room-row {
-    grid-template-columns: minmax(0, 1fr) minmax(6.5rem, 8rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .room-row > .text-input {
+    grid-column: 1 / -1;
   }
   .room-row .small {
     grid-column: 1 / -1;

@@ -10,6 +10,7 @@ import { buildStairs } from './stairs';
 import { buildRailings } from './railings';
 import { buildFurniture, disposePrimitiveCache } from './furniture';
 import { buildExterior } from './exterior';
+import { buildColumns } from './columns';
 
 export type { DoorLeafDef } from './openings';
 
@@ -28,15 +29,15 @@ const collect = (sets: BuilderSet) => new Map(sets.entries().map(([k, b]) => [k,
 
 export function buildFloorGeometry(plan: FloorPlan, index: number): FloorBuild {
   const floor = plan.floors[index];
-  const topIndex = plan.floors.reduce((best, f, i) => (f.elevation > plan.floors[best].elevation ? i : best), 0);
   const shell = new BuilderSet();
-  buildWalls(plan, floor, shell, { isTopFloor: index === topIndex });
+  buildWalls(plan, floor, shell);
   const { doors } = buildOpenings(plan, floor, shell);
   buildFloors(plan, floor, shell);
   buildCeilings(plan, floor, shell);
   buildTrim(plan, floor, shell);
   buildStairs(plan, floor.id, shell);
   buildRailings(plan, floor, shell);
+  buildColumns(plan, floor, shell);
   const furniture = new BuilderSet();
   buildFurniture(floor, furniture);
   disposePrimitiveCache();

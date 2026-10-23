@@ -1,6 +1,7 @@
 import type { Floor, FloorPlan, Vec2 } from '../data/schema';
 import { bounds, interiorPoint, polygonArea, type Bounds } from '../util/math2d';
 import { segmentPoint, wallSegments } from '../plan/walls';
+import { columnOutline } from '../geometry/columns';
 import { stairInfos } from '../plan/stairs';
 import { el, hasArabic } from './dom';
 
@@ -188,7 +189,7 @@ function drawFloor(g: CanvasRenderingContext2D, plan: FloorPlan, floor: Floor, p
   // Rooms.
   for (const r of floor.rooms) {
     path(r.polygon);
-    g.fillStyle = r.outdoor ? 'rgba(180, 190, 200, 0.28)' : r.floorMaterial === 'tile' ? 'rgba(225, 228, 232, 0.5)' : 'rgba(236, 214, 178, 0.5)';
+    g.fillStyle = r.glazed ? 'rgba(176, 208, 236, 0.45)' : r.outdoor ? 'rgba(180, 190, 200, 0.28)' : r.floorMaterial === 'tile' ? 'rgba(225, 228, 232, 0.5)' : 'rgba(236, 214, 178, 0.5)';
     g.fill();
   }
   // Stairs: treads and an arrow pointing up the flight.
@@ -231,6 +232,19 @@ function drawFloor(g: CanvasRenderingContext2D, plan: FloorPlan, floor: Floor, p
   g.strokeStyle = '#2b2d31';
   g.lineCap = 'butt';
   for (const s of wallSegments(plan, floor)) {
+    if (s.glazed) {
+      // Full-height glazing (a glass balcony): drawn like a window.
+      const [x0, y0] = px(segmentPoint(s, 0));
+      const [x1, y1] = px(segmentPoint(s, s.length));
+      g.strokeStyle = '#6f9fd0';
+      g.lineWidth = Math.max(2 * k, s.thickness * scale * 0.6);
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+      g.strokeStyle = '#2b2d31';
+      continue;
+    }
     g.lineWidth = Math.max(2 * k, s.thickness * scale);
     let cur = 0;
     const pieces: [number, number][] = [];
@@ -288,6 +302,12 @@ function drawFloor(g: CanvasRenderingContext2D, plan: FloorPlan, floor: Floor, p
       g.stroke();
       g.strokeStyle = '#2b2d31';
     }
+  }
+  // Columns.
+  for (const c of floor.columns ?? []) {
+    path(columnOutline(c));
+    g.fillStyle = '#2b2d31';
+    g.fill();
   }
   // Railings.
   g.strokeStyle = 'rgba(60, 64, 70, 0.8)';

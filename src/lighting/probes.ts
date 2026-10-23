@@ -15,7 +15,7 @@ import {
   type WebGLRenderTarget,
   type WebGLRenderer,
 } from 'three';
-import type { Floor, Vec2 } from '../data/schema';
+import type { Floor, Room, Vec2 } from '../data/schema';
 import { bounds, interiorPoint, pointInPolygon } from '../util/math2d';
 
 /**
@@ -50,8 +50,12 @@ export interface ProbeRoom {
 
 const W3 = (p: Vec2, h: number) => new Vector3(p.x, h, -p.y);
 
-/** Picks up to MAX_PROBES_PER_FLOOR indoor rooms (largest first) and assigns slots 1..N. */
-export function probeRooms(floor: Floor): ProbeRoom[] {
+/**
+ * Picks up to MAX_PROBES_PER_FLOOR indoor rooms (largest first) and assigns slots 1..N. Spaces rising
+ * from a floor below (a double-height room beside a mezzanine) take the slots left, captured at this
+ * floor's level, so the faces of this floor that look into them are lit like them.
+ */
+export function probeRooms(floor: Floor, rising: { floor: Floor; room: Room }[] = []): ProbeRoom[] {
   const rooms = floor.rooms
     .filter((r) => !r.outdoor)
     .map((r) => {
@@ -60,7 +64,7 @@ export function probeRooms(floor: Floor): ProbeRoom[] {
     })
     .sort((a, b) => b.area - a.area)
     .slice(0, MAX_PROBES_PER_FLOOR);
-  return rooms.map(({ r }, i) => {
+  const own = rooms.map(({ r }, i) => {
     const b = bounds(r.polygon);
     const ceil = r.ceilingHeight ?? floor.ceilingHeight;
     const ip = interiorPoint(r.polygon);
@@ -73,6 +77,20 @@ export function probeRooms(floor: Floor): ProbeRoom[] {
       max: new Vector3(b.maxX, floor.elevation + ceil, -b.minY),
     };
   });
+  const extra = rising.slice(0, MAX_PROBES_PER_FLOOR - own.length).map(({ floor: f, room: r }, i) => {
+    const b = bounds(r.polygon);
+    const top = f.elevation + (r.ceilingHeight ?? f.ceilingHeight);
+    return {
+      roomId: r.id,
+      slot: own.length + i + 1,
+      polygon: r.polygon,
+      // Captured where the room's own probe on its floor is, so both floors light it alike.
+      position: W3(interiorPoint(r.polygon), f.elevation + Math.min(1.4, top - f.elevation - 0.3)),
+      min: new Vector3(b.minX, f.elevation, -b.maxY),
+      max: new Vector3(b.maxX, top, -b.minY),
+    };
+  });
+  return [...own, ...extra];
 }
 
 /** Writes the probeSlot attribute: each triangle takes the room it faces (centroid + normal). */
@@ -82,10 +100,11 @@ export function assignProbeSlots(geom: BufferGeometry, rooms: ProbeRoom[], floor
   const idx = geom.getIndex();
   const slots = new Float32Array(pos.count);
   const tri = idx ? idx.count / 3 : pos.count / 3;
-  const roomPolys = floor.rooms.map((r) => ({ id: r.id, poly: r.polygon }));
+  // This floor's rooms first, then the spaces rising from below that have probes.
+  const roomPolys = [...floor.rooms.map((r) => ({ id: r.id, poly: r.polygon })), ...rooms.filter((r) => !floor.rooms.some((x) => x.id === r.roomId)).map((r) => ({ id: r.roomId, poly: r.polygon }))];
   const slotOf = new Map(rooms.map((r) => [r.roomId, r.slot]));
   const lo = floor.elevation - 0.25;
-  const hi = floor.elevation + floor.ceilingHeight + 0.25;
+  const hi = floor.elevation + Math.max(floor.ceilingHeight, ...floor.rooms.map((r) => r.ceilingHeight ?? 0)) + 0.25;
   for (let t = 0; t < tri; t++) {
     const ia = idx ? idx.getX(t * 3) : t * 3;
     const ib = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;

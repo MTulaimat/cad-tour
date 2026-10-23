@@ -24,6 +24,7 @@ export type MaterialKey =
   | 'stair-paint'
   | 'metal-brushed'
   | 'metal-dark'
+  | 'steel-black'
   | 'chrome'
   | 'fabric'
   | 'fabric-accent'

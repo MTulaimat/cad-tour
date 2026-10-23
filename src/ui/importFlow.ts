@@ -1,6 +1,6 @@
-import type { FloorMaterialKey, FloorPlan } from '../data/schema';
+import type { FloorMaterialKey, FloorPlan, StairFinish } from '../data/schema';
 import { FLOOR_MATERIALS } from '../data/schema';
-import { DxfImportSession, DEFAULT_SETTINGS, ROLES, type BuildRequest, type FloorAssignment, type FloorBox, type ImportReport, type ImportSettings, type LayerRole } from '../data/dxf';
+import { DxfImportSession, DEFAULT_SETTINGS, ROLES, ROOM_KINDS, type BuildRequest, type FloorAssignment, type FloorBox, type ImportReport, type ImportSettings, type LayerRole, type RoomKind } from '../data/dxf';
 import { loadMapping, saveMapping } from '../data/dxf/layers';
 import { UNIT_LABEL, UNIT_SCALE, formatSpan, type UnitKey } from '../data/dxf/units';
 import { el, hasArabic, setLabel } from './dom';
@@ -46,7 +46,7 @@ export class ImportFlow {
   private hidden = new Set<string>();
   private floors: FloorAssignment = { mode: 'single' };
   private settings: ImportSettings = { ...DEFAULT_SETTINGS, units: 'mm' };
-  private roomEdits: Record<string, { name?: string; floorMaterial?: FloorMaterialKey }> = {};
+  private roomEdits: Record<string, { name?: string; floorMaterial?: FloorMaterialKey; kind?: RoomKind }> = {};
   private lastPlan: FloorPlan | null = null;
   private fileName = '';
 
@@ -236,7 +236,9 @@ export class ImportFlow {
     back.addEventListener('click', () => this.unitsStep());
     const cancel = el('button', { class: 'btn ghost', type: 'button' }, ['Cancel']);
     cancel.addEventListener('click', () => this.cancel());
-    const info = s.warnings.length ? el('div', { class: 'message info' }, [s.warnings.join(' ')]) : null;
+    const found = this.floors.mode === 'boxes' && this.floors.auto ? `Found ${(this.floors.boxes ?? []).length} plans drawn side by side. Each is a floor with its own box, lowest floor first; draw the boxes again if that is wrong.` : '';
+    const notes = [...s.warnings, found].filter(Boolean);
+    const info = notes.length ? el('div', { class: 'message info', 'data-testid': 'layers-note' }, [notes.join(' ')]) : null;
     this.show(
       el('h2', {}, ['Map the layers']),
       el('p', {}, ['Each layer was given a role from its name. Change any that are wrong, and switch off layers to leave them out.']),
@@ -389,11 +391,13 @@ export class ImportFlow {
     // Settings (Q12): wall thickness, ceiling height, units, tolerance, plus floor height and openings.
     const num = (label: string, key: keyof ImportSettings, step: number, min: number, max: number) => {
       const id = `set-${key}`;
-      const input = el('input', { type: 'number', id, step, min, max, class: 'text-input num', value: String(this.settings[key]) });
+      // The upper floor's ceiling follows the ceiling height until it is set on its own.
+      const value = () => String(this.settings[key] ?? this.settings.ceilingHeight);
+      const input = el('input', { type: 'number', id, step, min, max, class: 'text-input num', value: value() });
       input.addEventListener('change', () => {
         const v = Number(input.value);
         if (Number.isFinite(v) && v >= min && v <= max) (this.settings as unknown as Record<string, number>)[key] = v;
-        else input.value = String(this.settings[key]);
+        else input.value = value();
       });
       return el('div', { class: 'row' }, [el('label', { for: id }, [label]), input]);
     };
@@ -401,11 +405,22 @@ export class ImportFlow {
     for (const u of Object.keys(UNIT_SCALE) as UnitKey[]) units.appendChild(el('option', { value: u, selected: u === this.settings.units }, [UNIT_LABEL[u]]));
     units.value = this.settings.units;
     units.addEventListener('change', () => (this.settings.units = units.value as UnitKey));
+    const finish = el('select', { id: 'set-stairFinish', 'aria-label': 'Stair finish' });
+    for (const [k, label] of [
+      ['oak', 'Oak'],
+      ['black-steel', 'Black steel'],
+    ] as [StairFinish, string][])
+      finish.appendChild(el('option', { value: k, selected: k === (this.settings.stairFinish ?? 'oak') }, [label]));
+    finish.value = this.settings.stairFinish ?? 'oak';
+    finish.addEventListener('change', () => (this.settings.stairFinish = finish.value as StairFinish));
+    const finishRow = el('div', { class: 'row' }, [el('label', { for: 'set-stairFinish' }, ['Stair and railings']), finish]);
     const settings = el('div', { class: 'settings-grid' }, [
       el('div', { class: 'row' }, [el('label', { for: 'set-units' }, ['Units']), units]),
       num('Default wall thickness (m)', 'wallThickness', 0.01, 0.05, 0.6),
       num('Ceiling height (m)', 'ceilingHeight', 0.05, 2.1, 6),
-      num('Floor to floor (m)', 'floorToFloor', 0.05, 2.4, 8),
+      num('Floor to floor (m)', 'floorToFloor', 0.05, 1.8, 8),
+      num('Upper floor ceiling height (m)', 'upperCeilingHeight', 0.05, 1.8, 6),
+      finishRow,
       num('Snap tolerance (m)', 'tolerance', 0.005, 0.001, 0.2),
       num('Door height (m)', 'doorHeight', 0.05, 1.8, 3),
       num('Window sill (m)', 'windowSill', 0.05, 0, 2),
@@ -429,7 +444,16 @@ export class ImportFlow {
           this.roomEdits[r.id] = { ...this.roomEdits[r.id], floorMaterial: mat.value as FloorMaterialKey };
           this.applyEdits();
         });
-        return el('div', { class: 'room-row' }, [name, el('span', { class: 'small' }, [`${r.floor}, ${r.area.toFixed(1)} m2`]), mat]);
+        // What the room is: changing it rebuilds (a balcony gets glazing or a railing).
+        const kind = el('select', { 'aria-label': `Type of ${r.name}` });
+        for (const k of ROOM_KINDS) kind.appendChild(el('option', { value: k.key, selected: k.key === r.kind }, [k.label]));
+        kind.value = r.kind;
+        kind.addEventListener('change', () => {
+          this.roomEdits[r.id] = { ...this.roomEdits[r.id], kind: kind.value as RoomKind };
+          void this.buildAndReport();
+        });
+        const height = r.kind === 'open-balcony' ? '' : `, ${r.ceilingHeight.toFixed(2)} m high`;
+        return el('div', { class: 'room-row' }, [name, el('span', { class: 'small' }, [`${r.floor}, ${r.area.toFixed(1)} m2${height}`]), kind, mat]);
       }),
     );
 
@@ -454,6 +478,7 @@ export class ImportFlow {
     this.show(
       el('h2', {}, ['Check the plan']),
       stats,
+      ...(report.notes.length ? [el('div', { class: 'message info', 'data-testid': 'import-notes' }, report.notes.map((n) => el('p', {}, [n])))] : []),
       el('h3', {}, ['Warnings']),
       warnings,
       el('h3', {}, ['Rooms']),

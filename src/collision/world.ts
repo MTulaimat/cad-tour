@@ -1,9 +1,10 @@
 import type { FloorPlan, Vec2 } from '../data/schema';
 import { add, dist, len, lerp2, normalize, orientedRect, perp, pointInPolygon, scale, sub, closestT } from '../util/math2d';
-import { faceRange, segmentPoint, wallSegments } from '../plan/walls';
+import { faceRange, segmentPoint, topAt, wallSegments } from '../plan/walls';
 import { flightHeightAt, stairInfos, type FlightInfo } from '../plan/stairs';
 import { railRuns } from '../geometry/railings';
 import { furnitureSize, pieceFor } from '../geometry/furniture';
+import { columnOutline, columnTop } from '../geometry/columns';
 
 /**
  * 2D collision: the player is a vertical capsule (a circle in plan with a height span) pushed out
@@ -61,30 +62,41 @@ export class CollisionWorld {
       const E = floor.elevation;
       for (const s of wallSegments(plan, floor)) {
         const y0 = E - floor.slabThickness;
-        const y1 = E + s.height + 0.05;
+        // A wall stops under the floor above or a stair landing: it blocks only up to there.
+        const y1At = (u: number) => topAt(s, u) + 0.05;
         const doors = s.openings.filter((o) => o.opening.type === 'door');
         for (const left of [true, false]) {
           const side = left ? s.thickness / 2 : -s.thickness / 2;
           const [fu0, fu1] = faceRange(s, left);
-          const u0 = Math.min(fu0, fu1);
-          const u1 = Math.max(fu0, fu1);
-          let cur = u0;
-          for (const d of doors) {
-            if (d.u0 > cur) this.add(segmentPoint(s, cur, side), segmentPoint(s, d.u0, side), y0, y1, 'wall');
-            cur = Math.max(cur, d.u1);
+          for (const iv of s.tops) {
+            const u0 = Math.max(Math.min(fu0, fu1), iv.u0);
+            const u1 = Math.min(Math.max(fu0, fu1), iv.u1);
+            if (u1 - u0 < 1e-4) continue;
+            let cur = u0;
+            for (const d of doors) {
+              if (d.u1 <= cur || d.u0 >= u1) continue;
+              if (d.u0 > cur) this.add(segmentPoint(s, cur, side), segmentPoint(s, d.u0, side), y0, iv.y + 0.05, 'wall');
+              cur = Math.max(cur, d.u1);
+            }
+            if (cur < u1) this.add(segmentPoint(s, cur, side), segmentPoint(s, u1, side), y0, iv.y + 0.05, 'wall');
           }
-          if (cur < u1) this.add(segmentPoint(s, cur, side), segmentPoint(s, u1, side), y0, y1, 'wall');
         }
         // Jambs across the wall thickness at doors, and free-end caps.
         for (const d of doors) {
-          for (const u of [d.u0, d.u1]) this.add(segmentPoint(s, u, -s.thickness / 2), segmentPoint(s, u, s.thickness / 2), y0, y1, 'wall');
+          for (const u of [d.u0, d.u1]) this.add(segmentPoint(s, u, -s.thickness / 2), segmentPoint(s, u, s.thickness / 2), y0, y1At(u), 'wall');
         }
-        if (!s.startJoined) this.add(s.startLeft, s.startRight, y0, y1, 'wall');
-        if (!s.endJoined) this.add(s.endLeft, s.endRight, y0, y1, 'wall');
+        if (!s.startJoined) this.add(s.startLeft, s.startRight, y0, s.tops[0].y + 0.05, 'wall');
+        if (!s.endJoined) this.add(s.endLeft, s.endRight, y0, s.tops[s.tops.length - 1].y + 0.05, 'wall');
       }
       // Railings: balconies and stairwell guards.
       for (const run of railRuns(plan, floor)) {
         for (let i = 1; i < run.points.length; i++) this.add(run.points[i - 1], run.points[i], E - 0.2, E + run.height, 'rail');
+      }
+      // Columns standing free.
+      for (const c of floor.columns ?? []) {
+        const o = columnOutline(c);
+        const top = columnTop(floor, c);
+        for (let i = 0; i < o.length; i++) this.add(o[i], o[(i + 1) % o.length], E, top, 'wall');
       }
       // Furniture footprints.
       for (const item of floor.furniture) {
@@ -121,6 +133,8 @@ export class CollisionWorld {
         }
       }
       for (const l of st.landings) this.landings.push(l);
+      // Guards along the open sides of landings between flights.
+      for (const r of st.landingRails) this.add(r.a, r.b, r.elevation - 0.2, r.elevation + 1.0, 'rail');
     }
   }
 

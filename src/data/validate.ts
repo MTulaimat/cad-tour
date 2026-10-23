@@ -1,5 +1,5 @@
 import type { FloorPlan, Vec2 } from './schema';
-import { FLOOR_MATERIALS, SCHEMA_VERSION } from './schema';
+import { FLOOR_MATERIALS, SCHEMA_VERSION, STAIR_FINISHES } from './schema';
 import { ensureCCW, normalize, polylineLength, samePoint } from '../util/math2d';
 
 /**
@@ -122,8 +122,23 @@ export function validatePlan(input: unknown): ValidationResult {
       if (!isStr(r.name)) err(`${rp}.name`, 'expected a string');
       vecs(r.polygon, `${rp}.polygon`, 3);
       if (!FLOOR_MATERIALS.includes(r.floorMaterial as never)) err(`${rp}.floorMaterial`, `expected one of ${FLOOR_MATERIALS.join(', ')}`);
-      num(r, 'ceilingHeight', rp, { min: 1.8, max: 10, optional: true });
+      num(r, 'ceilingHeight', rp, { min: 1.8, max: 20, optional: true });
+      if (r.glazed !== undefined && typeof r.glazed !== 'boolean') err(`${rp}.glazed`, 'expected true or false');
     });
+
+    if (f.columns !== undefined) {
+      list(f, 'columns', fp).forEach((c, ci) => {
+        const cp = `${fp}.columns[${ci}]`;
+        if (!isObj(c)) return err(cp, 'expected an object');
+        str(c, 'id', cp);
+        vec(c.center, `${cp}.center`);
+        num(c, 'radius', cp, { min: 0.02, max: 3, optional: true });
+        num(c, 'width', cp, { min: 0.02, max: 5, optional: true });
+        num(c, 'depth', cp, { min: 0.02, max: 5, optional: true });
+        num(c, 'rotation', cp, { optional: true });
+        if (c.radius === undefined && (c.width === undefined || c.depth === undefined)) err(cp, 'expected a radius, or a width and depth');
+      });
+    }
 
     list(f, 'furniture', fp).forEach((it, ii) => {
       const ip = `${fp}.furniture[${ii}]`;
@@ -145,6 +160,7 @@ export function validatePlan(input: unknown): ValidationResult {
         str(r, 'id', rp);
         vecs(r.points, `${rp}.points`, 2);
         num(r, 'height', rp, { min: 0.3, max: 3 });
+        if (r.finish !== undefined && r.finish !== 'brushed' && r.finish !== 'black-steel') err(`${rp}.finish`, "expected 'brushed' or 'black-steel'");
       });
     }
   });
@@ -158,6 +174,7 @@ export function validatePlan(input: unknown): ValidationResult {
     if (isStr(s.fromFloorId) && !floorIds.has(s.fromFloorId)) err(`${sp}.fromFloorId`, `no floor ${s.fromFloorId}`);
     if (isStr(s.toFloorId) && !floorIds.has(s.toFloorId)) err(`${sp}.toFloorId`, `no floor ${s.toFloorId}`);
     vecs(s.outline, `${sp}.outline`, 3);
+    if (s.finish !== undefined && !STAIR_FINISHES.includes(s.finish as never)) err(`${sp}.finish`, `expected one of ${STAIR_FINISHES.join(', ')}`);
     const flights = list(s, 'flights', sp);
     if (flights.length === 0) err(`${sp}.flights`, 'expected at least one flight');
     flights.forEach((fl, i) => {

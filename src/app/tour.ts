@@ -43,6 +43,7 @@ import { PostPipeline } from '../render/post';
 import { DynamicResolution, tierConfig, type Tier, type TierConfig } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import { pointInPolygon } from '../util/math2d';
+import { risingRooms } from '../plan/levels';
 
 /** Ground level under the apartment, about four storeys down (Q5). */
 export const GROUND_DEPTH = 12;
@@ -255,7 +256,7 @@ export class Tour {
     const lib = new MaterialLibrary();
     const probes = createProbeUniforms();
     const objects = floorObjects(build, lib.get);
-    const rooms = this.config.probes ? probeRooms(floor) : [];
+    const rooms = this.config.probes ? probeRooms(floor, risingRooms(plan, floor)) : [];
     // Tag every triangle with the room it faces, then patch the floor's materials.
     objects.root.traverse((o) => {
       const m = o as Mesh;
@@ -337,11 +338,30 @@ export class Tour {
     // Light every floor's rooms while capturing so stairwells see lit neighbours.
     const saved = this.currentFloor;
     const wanted = this.wantedFloor;
+    const plan = this.plan;
+    const own = (i: number) => (r: { roomId: string }) => !plan || plan.floors[i].rooms.some((x) => x.id === r.roomId);
     for (let i = 0; i < this.floors.length; i++) {
       const f = this.floors[i];
       if (!f) continue;
       this.setFloor(i, true);
-      this.capture.capture(this.scene, f.rooms, f.probes, this.probeHidden);
+      this.capture.capture(this.scene, f.rooms.filter(own(i)), f.probes, this.probeHidden);
+    }
+    // A double-height room seen from a mezzanine uses its own floor's probe, so both floors' faces
+    // in it are lit alike.
+    for (let i = 0; i < this.floors.length; i++) {
+      const f = this.floors[i];
+      if (!f) continue;
+      for (const r of f.rooms.filter((x) => !own(i)(x))) {
+        for (let j = 0; j < this.floors.length; j++) {
+          const src = this.floors[j]?.rooms.find((x) => x.roomId === r.roomId && own(j)(x));
+          if (!src) continue;
+          const from = this.floors[j]!.probes;
+          f.probes.probeMap.value[r.slot - 1] = from.probeMap.value[src.slot - 1];
+          f.probes.probeMin.value[r.slot - 1].copy(from.probeMin.value[src.slot - 1]);
+          f.probes.probeMax.value[r.slot - 1].copy(from.probeMax.value[src.slot - 1]);
+          f.probes.probePos.value[r.slot - 1].copy(from.probePos.value[src.slot - 1]);
+        }
+      }
     }
     this.setFloor(saved, true);
     this.wantedFloor = wanted;

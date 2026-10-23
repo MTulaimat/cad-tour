@@ -1,6 +1,7 @@
 import { CylinderGeometry, Matrix4, Quaternion, Vector3 } from 'three';
-import type { FloorPlan, Vec2 } from '../data/schema';
-import { add, angleOf, scale } from '../util/math2d';
+import type { FloorPlan, StairFinish, Vec2 } from '../data/schema';
+import type { MaterialKey } from '../materials/keys';
+import { add, angleOf, normalize, scale, sub } from '../util/math2d';
 import { stairInfos, type FlightInfo } from '../plan/stairs';
 import { type BuilderSet, type MeshBuilder, W } from './builder';
 
@@ -55,10 +56,18 @@ function sidePanel(b: MeshBuilder, f: FlightInfo, profile: [number, number][], l
   }
 }
 
-function buildFlight(sets: BuilderSet, f: FlightInfo, ceilingAbove: number): void {
+/** Materials of a stair finish: oak treads with painted risers and stringers, or black steel. */
+function finishKeys(finish: StairFinish): { tread: MaterialKey; body: MaterialKey; rail: MaterialKey; wallRail: MaterialKey } {
+  return finish === 'black-steel'
+    ? { tread: 'steel-black', body: 'steel-black', rail: 'steel-black', wallRail: 'steel-black' }
+    : { tread: 'stair-wood', body: 'stair-paint', rail: 'stair-wood', wallRail: 'metal-brushed' };
+}
+
+function buildFlight(sets: BuilderSet, f: FlightInfo, ceilingAbove: number, finish: StairFinish): void {
   const { going: g, riserHeight: r, risers: N, width: w } = f.flight;
-  const treads = sets.get('stair-wood');
-  const paint = sets.get('stair-paint');
+  const keys = finishKeys(finish);
+  const treads = sets.get(keys.tread);
+  const paint = sets.get(keys.body);
 
   // Treads with a small nosing, risers set back under them.
   for (let k = 1; k < N; k++) {
@@ -89,16 +98,17 @@ function buildFlight(sets: BuilderSet, f: FlightInfo, ceilingAbove: number): voi
     sidePanel(paint, f, profile, lat0, lat1);
   }
 
-  const handrail = sets.get('stair-wood');
-  const metal = sets.get('metal-brushed');
+  const handrail = sets.get(keys.rail);
+  const metal = sets.get(keys.wallRail);
   for (const sideSign of [1, -1]) {
     const open = sideSign > 0 ? f.openLeft : f.openRight;
     const lat = sideSign * (w / 2 + STRINGER_T / 2);
     for (const [a, b] of open) {
-      // Spandrel panel closing the space under the open side (only below the floor above).
+      // Spandrel panel closing the space under the open side (only below the floor above). A steel
+      // stair stays open underneath.
       const bottomEdge = (s: number) => Math.min(ceilingAbove, topEdge(s) - STRINGER_DEPTH);
       const sa = Math.max(a, sFloor);
-      if (b > sa + 0.05) {
+      if (finish !== 'black-steel' && b > sa + 0.05) {
         const panel: [number, number][] = [
           [sa, f.base],
           [b, f.base],
@@ -164,14 +174,35 @@ function roundRail(b: MeshBuilder, f: FlightInfo, s0: number, s1: number, lat: n
 export function buildStairs(plan: FloorPlan, floorId: string, sets: BuilderSet): void {
   for (const s of stairInfos(plan)) {
     if (s.from.id !== floorId) continue;
+    const finish = s.stair.finish ?? 'oak';
+    const keys = finishKeys(finish);
     const ceilingAbove = s.from.elevation + s.from.ceilingHeight;
-    for (const f of s.flights) buildFlight(sets, f, ceilingAbove);
-    // Intermediate landings (L and U stairs): a slab at the landing height.
+    for (const f of s.flights) buildFlight(sets, f, ceilingAbove, finish);
+    // Intermediate landings: a slab at the landing height, with its edges.
     for (const l of s.landings) {
       if (Math.abs(l.elevation - s.to.elevation) < 0.01) continue;
-      const b = sets.get('stair-wood');
-      b.polygon(l.polygon, l.elevation, true);
-      sets.get('stair-paint').polygon(l.polygon, l.elevation - 0.2, false);
+      const t = finish === 'black-steel' ? 0.08 : 0.2;
+      sets.get(keys.tread).polygon(l.polygon, l.elevation, true);
+      const body = sets.get(keys.body);
+      body.polygon(l.polygon, l.elevation - t, false);
+      for (let i = 0; i < l.polygon.length; i++) {
+        const a = l.polygon[i];
+        const c = l.polygon[(i + 1) % l.polygon.length];
+        body.quadAuto(W(a, l.elevation - t), W(c, l.elevation - t), W(c, l.elevation), W(a, l.elevation));
+      }
+    }
+    // Guards along the open sides of landings: balusters and a handrail.
+    for (const rail of s.landingRails) {
+      const d = normalize(sub(rail.b, rail.a));
+      const len = Math.hypot(rail.b.x - rail.a.x, rail.b.y - rail.a.y);
+      const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), angleOf(d));
+      const at = (u: number, y: number) => new Matrix4().compose(W(add(rail.a, scale(d, u)), y), q, new Vector3(1, 1, 1));
+      const posts = Math.max(1, Math.round(len / s.flights[0].flight.going));
+      for (let k = 0; k <= posts; k++) {
+        const u = Math.min(len - 0.011, Math.max(0.011, (len * k) / posts));
+        sets.get(keys.body).box(at(u, rail.elevation + (RAIL_H - 0.03) / 2), 0.022, RAIL_H - 0.03, 0.022);
+      }
+      sets.get(keys.rail).box(at(len / 2, rail.elevation + RAIL_H), len, 0.045, 0.055);
     }
   }
 }

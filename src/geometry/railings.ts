@@ -8,6 +8,7 @@ export interface RailRun {
   points: Vec2[];
   height: number;
   style: 'glass' | 'metal';
+  finish?: 'brushed' | 'black-steel';
 }
 
 const POST = 0.04;
@@ -15,7 +16,7 @@ const MAX_PANEL = 1.4;
 
 /** Every railing on a floor: explicit ones plus guards around stairwells arriving here. */
 export function railRuns(plan: FloorPlan, floor: Floor): RailRun[] {
-  const runs: RailRun[] = floor.railings.map((r) => ({ points: r.points, height: r.height, style: r.style }));
+  const runs: RailRun[] = floor.railings.map((r) => ({ points: r.points, height: r.height, style: r.style, ...(r.finish ? { finish: r.finish } : {}) }));
   for (const s of stairInfos(plan)) {
     if (s.to.id !== floor.id) continue;
     for (const [a, b] of s.guardEdges) {
@@ -24,7 +25,8 @@ export function railRuns(plan: FloorPlan, floor: Floor): RailRun[] {
       const n = perp(d);
       // Outline is counterclockwise; the slab side is to the right of travel.
       const back = scale(n, -0.03);
-      runs.push({ points: [add(a, back), add(b, back)], height: 1.0, style: 'glass' });
+      // A steel stair gets steel guards to match; otherwise a glass balustrade.
+      runs.push(s.stair.finish === 'black-steel' ? { points: [add(a, back), add(b, back)], height: 1.0, style: 'metal', finish: 'black-steel' } : { points: [add(a, back), add(b, back)], height: 1.0, style: 'glass' });
     }
   }
   return runs;
@@ -32,11 +34,11 @@ export function railRuns(plan: FloorPlan, floor: Floor): RailRun[] {
 
 export function buildRailings(plan: FloorPlan, floor: Floor, sets: BuilderSet): void {
   const E = floor.elevation;
-  const metal = sets.get('metal-brushed');
   const glass = sets.get('glass');
   const q = (d: Vec2) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), angleOf(d));
   for (const run of railRuns(plan, floor)) {
     const H = run.height;
+    const metal = sets.get(run.finish === 'black-steel' ? 'steel-black' : 'metal-brushed');
     for (let i = 1; i < run.points.length; i++) {
       const a = run.points[i - 1];
       const b = run.points[i];

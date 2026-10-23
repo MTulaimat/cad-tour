@@ -1,5 +1,5 @@
 import type { Floor, FloorPlan, Stair, StairFlight, Vec2 } from '../data/schema';
-import { add, closestT, cross, dist, dot, lerp2, normalize, perp, scale, sub } from '../util/math2d';
+import { add, closestT, cross, dist, dot, lerp2, normalize, perp, pointInPolygon, scale, sub } from '../util/math2d';
 import { wallSegments } from './walls';
 
 export interface FlightInfo {
@@ -28,6 +28,8 @@ export interface StairInfo {
   flights: FlightInfo[];
   /** Absolute elevation of the landings. */
   landings: { polygon: Vec2[]; elevation: number }[];
+  /** Open sides of the landings between flights (not against a wall, not where a flight joins). */
+  landingRails: { a: Vec2; b: Vec2; elevation: number }[];
   /** Outline edges on the upper floor that need a guard rail (not walls, not the arrival edge). */
   guardEdges: [Vec2, Vec2][];
   /** Index of the outline edge where the top flight arrives (i to i + 1), or -1. */
@@ -141,7 +143,47 @@ export function stairInfos(plan: FloorPlan): StairInfo[] {
         continue;
       }
       const free = subtractIntervals(len, coveredByWalls(plan, to, a, d, len, 0.06));
-      for (const [s0, s1] of free) guardEdges.push([add(a, scale(d, s0)), add(a, scale(d, s1))]);
+      // Only where the floor above has floor beside the opening (a mezzanine may not).
+      const out = scale(perp(d), -0.15);
+      const slabBeside = (s: number) => to.rooms.some((r) => pointInPolygon(add(add(a, scale(d, s)), out), r.polygon));
+      for (const [s0, s1] of free) {
+        let start: number | null = null;
+        const n = Math.max(1, Math.ceil((s1 - s0) / 0.1));
+        for (let k = 0; k <= n; k++) {
+          const s = s0 + ((s1 - s0) * k) / n;
+          const ok = k < n && slabBeside(s + (s1 - s0) / n / 2);
+          if (ok && start === null) start = s;
+          if (!ok && start !== null) {
+            if (s - start > 0.05) guardEdges.push([add(a, scale(d, start)), add(a, scale(d, s))]);
+            start = null;
+          }
+        }
+      }
+    }
+
+    // Landings between flights: their sides that are neither against a wall nor joined by a flight.
+    const landingRails: StairInfo['landingRails'] = [];
+    const total = stair.flights.reduce((n, f) => n + f.risers * f.riserHeight, 0);
+    for (const l of stair.landings) {
+      if (l.elevation >= total - 0.01) continue;
+      const p = l.polygon;
+      for (let i = 0; i < p.length; i++) {
+        const a = p[i];
+        const b = p[(i + 1) % p.length];
+        const len = dist(a, b);
+        if (len < 0.05) continue;
+        const d = normalize(sub(b, a));
+        const mid = lerp2(a, b, 0.5);
+        const joined = flights.some((f) => {
+          if (Math.abs(dot(d, f.dir)) > 0.2) return false;
+          const ends = [f.flight.start, add(f.flight.start, scale(f.dir, f.run))];
+          return ends.some((e) => Math.abs(dot(sub(mid, e), f.dir)) < f.flight.going * 0.6 && Math.abs(dot(sub(mid, e), f.side)) < f.flight.width / 2 + 0.05);
+        });
+        if (joined) continue;
+        for (const [s0, s1] of subtractIntervals(len, coveredByWalls(plan, from, a, d, len, 0.12))) {
+          landingRails.push({ a: add(a, scale(d, s0)), b: add(a, scale(d, s1)), elevation: from.elevation + l.elevation });
+        }
+      }
     }
 
     out.push({
@@ -150,6 +192,7 @@ export function stairInfos(plan: FloorPlan): StairInfo[] {
       to,
       flights,
       landings: stair.landings.map((l) => ({ polygon: l.polygon, elevation: from.elevation + l.elevation })),
+      landingRails,
       guardEdges,
       arrivalEdge,
       arrival: { point: arrivalPoint, dir: last.dir },
