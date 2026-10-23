@@ -276,6 +276,8 @@ function nameFromContents(types: string[]): string | null {
 export interface BuildResult {
   plan: FloorPlan;
   report: ImportReport;
+  /** How far each floor's drawing was moved (meters) to line it up on the lowest floor. */
+  alignment: Vec2[];
 }
 
 interface FloorWork {
@@ -951,7 +953,7 @@ export function buildPlan(model: DrawingModel, req: BuildRequest): BuildResult {
     throw err;
   }
   normalizePlan(plan);
-  return { plan, report: buildReport(plan, warnings, { doors: doorCount, windows: windowCount, furniture: furnitureCount }, notes) };
+  return { plan, report: buildReport(plan, warnings, { doors: doorCount, windows: windowCount, furniture: furnitureCount }, notes), alignment: align.offsets };
 }
 
 /**

@@ -151,19 +151,23 @@ export function snapOffset(lower: Vec2[], upper: Vec2[], estimate: Vec2, window 
     if (g) g.push(p);
     else grid.set(k, [p]);
   }
+  // How many corners land on a corner (within 5 mm), and how far off they are in total.
   const hits = (o: Vec2) => {
     let n = 0;
+    let err = 0;
     for (const q of upper) {
       const x = q.x + o.x;
       const y = q.y + o.y;
       const cx = Math.floor(x / cell);
       const cy = Math.floor(y / cell);
-      let found = false;
-      for (let i = -1; i <= 1 && !found; i++)
-        for (let j = -1; j <= 1 && !found; j++) for (const p of grid.get(`${cx + i},${cy + j}`) ?? []) if (Math.hypot(p.x - x, p.y - y) < 0.005) found = true;
-      if (found) n++;
+      let d = Infinity;
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const p of grid.get(`${cx + i},${cy + j}`) ?? []) d = Math.min(d, Math.hypot(p.x - x, p.y - y));
+      if (d < 0.005) {
+        n++;
+        err += d;
+      }
     }
-    return n;
+    return { n, err };
   };
   let best = estimate;
   let bestHits = hits(estimate);
@@ -172,17 +176,17 @@ export function snapOffset(lower: Vec2[], upper: Vec2[], estimate: Vec2, window 
     for (const p of lower) {
       const o = { x: p.x - q.x, y: p.y - q.y };
       if (Math.abs(o.x - estimate.x) > window || Math.abs(o.y - estimate.y) > window) continue;
-      const key = `${Math.round(o.x / 0.002)},${Math.round(o.y / 0.002)}`;
+      const key = `${Math.round(o.x / 0.0001)},${Math.round(o.y / 0.0001)}`;
       if (tried.has(key)) continue;
       tried.add(key);
       const h = hits(o);
-      if (h > bestHits || (h === bestHits && dist(o, estimate) < dist(best, estimate))) {
+      if (h.n > bestHits.n || (h.n === bestHits.n && h.err < bestHits.err - 1e-9)) {
         best = o;
         bestHits = h;
       }
     }
   }
-  return bestHits >= 3 ? best : estimate;
+  return bestHits.n >= 3 ? best : estimate;
 }
 
 /** Offsets that move each floor onto the lowest one. */
