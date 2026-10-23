@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { twoPlans } from '../fixtures/two-plans';
 
 /* DXF import end to end: file picker, units, layer mapping, report, build, tour. */
 
@@ -103,6 +104,42 @@ test.describe('dxf import', () => {
     expect(new Set(thick)).toEqual(new Set([0.2]));
     await walkInto(page, 'Bedroom 1');
     await shot(page, 'single-tour');
+  });
+
+  test('plans side by side: units fixed, stacked as a mezzanine, steel stair, walk up', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('cad-tour:settings', JSON.stringify({ quality: 'low', renderScale: 0.5 })));
+    await page.goto('./');
+    await page.getByTestId('file-input').setInputFiles({ name: 'two-plans.dxf', mimeType: 'application/dxf', buffer: Buffer.from(twoPlans()) });
+    // The header says millimeters but the drawing is in meters: no units question.
+    await expect(page.getByTestId('plan-preview')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('layers-note')).toContainText('Found 2 plans drawn side by side');
+    await expect(page.locator('[data-mode="boxes"]')).toHaveClass(/active/);
+    await shot(page, 'two-plans-mapping');
+    await page.getByTestId('layers-continue').click();
+    await expect(page.getByTestId('stat-floors')).toHaveText('2', { timeout: 60_000 });
+    await expect(page.getByTestId('import-notes')).toContainText('drawn in meters, so meters are used');
+    await expect(page.getByTestId('import-notes')).toContainText('stacked them as floors');
+    await expect(page.getByTestId('import-notes')).toContainText('The upper one is a mezzanine.');
+    await page.locator('#set-upperCeilingHeight').fill('2.2');
+    await page.locator('#set-upperCeilingHeight').dispatchEvent('change');
+    await page.locator('#set-stairFinish').selectOption('black-steel');
+    await page.getByTestId('rebuild').click();
+    await expect(page.getByTestId('import-notes')).toContainText('mezzanine', { timeout: 60_000 });
+    await shot(page, 'two-plans-report');
+    await buildAndStart(page);
+    const stair = await page.evaluate(() => (window as unknown as { __tour: { session: { plan: { stairs: { finish?: string }[] } } } }).__tour.session.plan.stairs.map((s) => s.finish));
+    expect(stair).toEqual(['black-steel']);
+    // Stand at the foot of the stair and walk up it with the keyboard onto the mezzanine.
+    type Hook = { __tour: { setState(s: Record<string, unknown>): void; getState(): { x: number; feet: number; floor: number } | null } };
+    await page.evaluate(() => (window as unknown as Hook).__tour.setState({ x: 9.4, y: 0.7, feet: 0, yaw: Math.PI / 2, pitch: 0 }));
+    await page.keyboard.down('KeyW');
+    await page.waitForFunction(() => ((window as unknown as Hook).__tour.getState()?.x ?? 9) < 4.6, null, { timeout: 120_000 });
+    await page.keyboard.up('KeyW');
+    const s = await page.evaluate(() => (window as unknown as Hook).__tour.getState()!);
+    expect(s.floor).toBe(1);
+    expect(s.feet).toBeCloseTo(3, 3);
+    await expect(page.getByTestId('floor-name')).toHaveText('Mezzanine');
+    await shot(page, 'two-plans-tour');
   });
 
   test('a DWG file is refused with the exact message', async ({ page }) => {

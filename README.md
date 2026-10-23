@@ -63,9 +63,13 @@ is parsed in a Web Worker in your browser.
 
 - **Format:** ASCII DXF. In AutoCAD use SAVEAS and choose *AutoCAD 2013 DXF* (ASCII). DWG files and
   binary DXF are refused with a message; the free ODA File Converter can also turn DWG into DXF.
-- **Units:** set `INSUNITS` in the drawing (millimeters, centimeters, meters, inches or feet). If it is
-  missing, or the plan comes out smaller than 3 m or larger than 100 m, you are asked to pick the
-  unit with a live size preview.
+- **Units:** set `INSUNITS` in the drawing (millimeters, centimeters, meters, inches or feet). The
+  importer also measures what is drawn (door widths, furniture sizes, wall thicknesses). When the
+  header gives an impossible size (smaller than 3 m or larger than 100 m) and the drawing clearly
+  agrees on another unit, that unit is used without asking and the report says why, for example
+  "The file says millimeters, but its doors, furniture and wall thicknesses are drawn in meters, so
+  meters are used." When there is no unit at all, or the evidence is not clear, you are asked to
+  pick one with a live size preview (the unit the drawing suggests is preselected).
 - **Layers:** walls, doors, windows, stairs and furniture on their own layers help a lot. Names are
   recognized automatically, in English and Arabic, for example `A-WALL`, `WALL`, `MUR`, `جدران`;
   `A-DOOR`, `DOOR`, `أبواب`; `A-GLAZ`, `WINDOW`, `شبابيك`; `A-STRS`, `STAIR`, `سلالم`; `A-FURN`,
@@ -74,30 +78,62 @@ is parsed in a Web Worker in your browser.
   rooms (for example between a kitchen and a living room) or outline a balcony.
 - **Walls:** double lines (5 to 40 cm apart), closed outlines or hatches, or single centerlines (built
   at a default thickness you can change). Small gaps where walls almost meet are closed; door-sized
-  gaps never are.
+  gaps never are. A solid hatch or a small closed outline inside a wall becomes a square column, a
+  circle (10 to 60 cm radius) on a wall layer a round one; both run floor to ceiling.
 - **Doors and windows:** door and window blocks, or doors drawn as a swing arc (plus leaf) in a wall
-  gap. Windows can be blocks or lines on a window layer. Each is snapped to its wall.
+  gap. Windows can be blocks or lines on a window layer. Lines drawn on the door layer across a gap
+  with no swing arc become a door: a sliding glass door when the gap is 1.2 m or wider, a hinged one
+  otherwise. Each is snapped to its wall. A gap with nothing in it is glazed full height when it is in an outside wall, and stays
+  an open passage (up to about 3 m) between two rooms inside. A room with no way in at all gets an
+  open doorway, with a warning, so it can still be walked into.
 - **Room names:** a TEXT or MTEXT label inside each room. Rooms are named from it (Arabic is shown
   right to left) and get a floor finish from keywords: bath, WC, kitchen get tile; balcony and terrace
-  get concrete and become outdoor rooms with a glass railing.
+  get concrete and become outdoor rooms with a glass railing. Level marks such as `+2.60` are never
+  taken for names. An unlabelled room is named after what is in it (beds make a bedroom, a WC a
+  bathroom, a sink, hob or counter a kitchen, a sofa a living room, a dining table a dining room).
 - **Stairs:** the stair outline, a line at each riser, and an arrow (or an UP label) pointing up.
-  You set the floor to floor height (3 m by default).
+  Tread lines are found on any layer, even mixed in with the walls: five or more parallel lines of
+  equal length (0.6 to 1.6 m) spaced 22 to 35 cm apart between two side lines make a flight, and a
+  longer gap between treads makes a landing. When the floor above is in the same file, the end of the
+  stair that continues on the upper plan is the top. You set the floor to floor height (3 m by
+  default).
 - **Several floors:** either prefix the layers per floor (`L1_`, `L2_`, ...) or draw a box around each
-  floor in the preview. Floors are lined up on their stair.
+  floor in the preview. Plans drawn side by side in one model space are found by themselves: each
+  becomes a floor with its own box, which you see (and can draw again) on the layer screen. The bigger
+  plan goes below; a clearly smaller one goes above as a mezzanine. Floors are lined up on their stair,
+  or on level marks that appear on both plans, and then snapped exactly onto the wall corners they
+  share.
 - **Furniture:** blocks are matched by name (bed, sofa, table, chair, wc, sink, bath, shower,
   counter, wardrobe and so on, English and Arabic) to the same 3D pieces the demo uses, scaled to the
-  block. Unknown blocks become plain volumes.
+  block. Unknown blocks become plain volumes. Layers named like `A-EQUP` count as furniture, and
+  furniture drawn as loose lines (exploded blocks) is recognized by its size and shape: beds side by
+  side are split apart, a wardrobe outline open towards a wall is closed against it, and a kitchen
+  front line with a sink or hob behind it becomes a counter.
+
+### Mezzanines and double height
+
+When the floor above is clearly smaller than the one below, it is a mezzanine. Rooms below that it
+does not cover rise through both levels (floor to floor plus the upper ceiling height), the rooms
+under it keep the lower ceiling, and every wall is built as tall as the rooms on either side need.
+The mezzanine's edge shows its slab, the stairwell gets guard rails (thin double lines drawn off the
+stair rails become railings too), and the stair can be built in oak or in black steel with matching
+railings. A balcony that is glazed on the outside (found
+from a hatched floor on the outer edge with no furniture, or set by hand in the report) becomes a
+glass balcony: a tiled room with full height glass on its outside walls and the view beyond.
 
 ### The report
 
 Before building you see the floors, rooms, walls, doors, windows, stairs and total area, and a list
 of warnings: gaps that were closed or left open, openings that are not on a wall, rooms without a
-label or with several labels, unusual sizes and stair rises. You can rename rooms, change their
-floor finish, and adjust units, wall thickness, ceiling height, floor to floor height, snapping
+label or with several labels, unusual sizes and stair rises. Notes above them say what the importer
+decided by itself (a unit it corrected, plans it stacked as floors). Each room shows its area and how
+high it is. You can rename rooms, change their floor finish and type (room, glass balcony or open
+balcony), and adjust units, wall thickness, ceiling height (the lower floor), floor to floor height,
+the upper floor ceiling height, the stair and railing finish (oak or black steel), snapping
 tolerance and door and window heights, then rebuild. If something fails you get the reason and the
 demo apartment as a fallback.
 
-The mapping is remembered per file on your device. The last imported plan is kept too, and the start
+The mapping and the settings are remembered per file on your device. The last imported plan is kept too, and the start
 screen offers **Continue**.
 
 Sample files are in [`samples/`](samples/): `clean-layered.dxf` (the demo apartment itself),
@@ -128,7 +164,11 @@ progress is never interrupted.
 ## Testing
 
 `npm test` runs the unit tests and `npm run test:e2e` the browser tests (it builds a test build
-first and serves it on port 4174). For screenshots of every room at several screen sizes, start
+first and serves it on port 4174). The unit tests include a walk check that floods each plan (the
+demo, the samples and a synthetic mezzanine flat) with the real collision world and fails if any
+room cannot be walked into. One test reads a real drawing that is not in the repository: it looks
+for `mezzanine.dxf` in the folder named by `CAD_TOUR_PRIVATE`, or in a `cad-tour-private` folder
+next to the checkout, and is skipped when the file is not there (as in CI). For screenshots of every room at several screen sizes, start
 `npm run dev` and run `node scripts/shots-app.mjs http://localhost:5173/cad-tour/ qa-output medium walk all desktop,fold,cover`.
 
 ## Assets

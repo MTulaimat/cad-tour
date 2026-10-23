@@ -210,9 +210,12 @@ export class ImportFlow {
     });
     const modeExtra = el('div', { class: 'floor-extra' });
     const setMode = (m: FloorAssignment['mode']) => {
-      if (m === 'single') this.floors = { mode: 'single' };
-      if (m === 'prefix') this.floors = { mode: 'prefix', prefixes: this.floors.prefixes ?? s.floors.prefixes ?? ['L1_', 'L2_'] };
-      if (m === 'boxes') this.floors = { mode: 'boxes', boxes: this.floors.boxes ?? [] };
+      // Showing the mode already chosen keeps it as it is (boxes found automatically stay marked so).
+      if (m !== this.floors.mode) {
+        if (m === 'single') this.floors = { mode: 'single' };
+        if (m === 'prefix') this.floors = { mode: 'prefix', prefixes: this.floors.prefixes ?? s.floors.prefixes ?? ['L1_', 'L2_'] };
+        if (m === 'boxes') this.floors = { mode: 'boxes', boxes: this.floors.boxes ?? [] };
+      }
       prefixInput.value = (this.floors.prefixes ?? []).join(', ');
       modeExtra.replaceChildren(...(m === 'prefix' ? [prefixInput] : m === 'boxes' ? [boxHint, clearBoxes] : []));
       for (const b of modeSeg.querySelectorAll('button')) b.classList.toggle('active', b.dataset.mode === m);
