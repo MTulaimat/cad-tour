@@ -730,7 +730,9 @@ export function buildPlan(model: DrawingModel, req: BuildRequest): BuildResult {
       const room = roomOf(p.rect.center);
       p.type = typeBySize(Math.max(p.rect.w, p.rect.d), Math.min(p.rect.w, p.rect.d), !!room && wetRooms.has(room));
     }
-    // Tables first, so chairs can turn to them.
+    // A television drawn as a thin outline is a screen, not a cabinet.
+    for (const p of pending) if (p.type === 'tv-unit' && Math.min(p.rect.w, p.rect.d) < 0.2) p.type = 'tv';
+        // Tables first, so chairs can turn to them.
     const order = (t: string) => (t.includes('table') ? 0 : t === 'chair' || t === 'armchair' ? 2 : 1);
     pending.sort((x, y) => order(x.type) - order(y.type));
     for (const p of pending) {

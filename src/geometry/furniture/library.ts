@@ -404,8 +404,11 @@ const cabinet: Builder = (p, s) => {
   doorFronts(p, 'lacquer-white', -w / 2, w / 2, 0.02, h - 0.02, d / 2, Math.max(1, Math.round(w / 0.5)));
 };
 
+/** A screen on a slim pedestal stand. */
 const tv: Builder = (p, s) => {
   p.rbox('black-glass', 0, s.z / 2 + 0.5, 0, s.x, s.z, 0.04, 0.008);
+  p.box('metal-dark', 0, 0.26, -0.04, 0.05, 0.5, 0.03);
+  p.box('metal-dark', 0, 0.01, -0.02, Math.min(0.45, s.x * 0.4), 0.02, 0.26);
 };
 
 /** Neutral low volume in the item's footprint, for imported blocks that match nothing. */

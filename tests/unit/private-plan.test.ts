@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS } from '../../src/data/dxf/types';
 import { validatePlan } from '../../src/data/validate';
 import { stairInfos } from '../../src/plan/stairs';
 import { CollisionWorld } from '../../src/collision/world';
+import { unreachableRooms } from './reach';
 
 /*
  * A real drawing that stays on the developer's machine (it is private and never committed): a flat
@@ -91,6 +92,10 @@ describe.skipIf(!folder)('the private mezzanine drawing', () => {
     // One step past the top riser, onto the landing.
     h = world.heightAt({ x: b.x + info.arrival.dir.x * 0.6, y: b.y + info.arrival.dir.y * 0.6 }, h);
     expect(h).toBeCloseTo(2.32, 3);
+  });
+
+  it('lets every room on both levels be walked into from the entrance', () => {
+    expect(unreachableRooms(r.plan)).toEqual([]);
   });
 
   it('has the heights: 2.20 under the mezzanine, 1.98 on it, 4.30 beside it', () => {

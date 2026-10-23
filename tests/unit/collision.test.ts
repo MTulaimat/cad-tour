@@ -8,6 +8,7 @@ import { buildFloorGeometry } from '../../src/geometry';
 import type { Vec2 } from '../../src/data/schema';
 import { entrances, roomAt, startSpawn } from '../../src/plan/navigation';
 import { ModeTransition } from '../../src/controls/transition';
+import { unreachableRooms } from './reach';
 
 const plan = normalizePlan(createDemoPlan());
 const world = new CollisionWorld(plan);
@@ -112,6 +113,10 @@ describe('collision world', () => {
     const doors = new DoorController(doorDefs, elev);
     for (let k = 0; k < 800; k++) body.step({ x: 0, y: 1, run: true }, world, doors.segments());
     expect(body.position.x).toBeLessThan(11.07 - 0.24);
+  });
+
+  it('lets every room on both floors be walked into from the front door', () => {
+    expect(unreachableRooms(plan)).toEqual([]);
   });
 });
 

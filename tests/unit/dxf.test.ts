@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS, type BuildRequest } from '../../src/data/dxf/types';
 import { classifyFile } from '../../src/app/files';
 import { polygonArea, polygonCentroid } from '../../src/util/math2d';
 import type { FloorPlan } from '../../src/data/schema';
+import { unreachableRooms } from './reach';
 
 const p = (x: number, y: number) => ({ x, y });
 
@@ -331,5 +332,11 @@ describe('sample files', () => {
     expect(names).toHaveLength(4);
     expect(r.plan.floors[0].openings.filter((o) => o.type === 'door')).toHaveLength(3);
     expect(r.report.warnings.some((w) => w.kind === 'gap')).toBe(true);
+  });
+
+  it('lets every room of every sample be walked into', () => {
+    for (const file of ['clean-layered.dxf', 'single-line-walls.dxf', 'messy-layer0.dxf']) {
+      expect(unreachableRooms(importSample(file).plan), file).toEqual([]);
+    }
   });
 });

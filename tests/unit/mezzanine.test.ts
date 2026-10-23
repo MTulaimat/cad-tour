@@ -19,6 +19,7 @@ import { buildFloorGeometry } from '../../src/geometry';
 import { CollisionWorld } from '../../src/collision/world';
 import { stairInfos } from '../../src/plan/stairs';
 import type { FloorPlan } from '../../src/data/schema';
+import { unreachableRooms } from './reach';
 
 const p = (x: number, y: number) => ({ x, y });
 
@@ -205,6 +206,15 @@ describe('a flat and its mezzanine drawn side by side', () => {
     }
     h = world.heightAt({ x: b.x - 0.6, y: b.y }, h);
     expect(h).toBeCloseTo(2.6, 3);
+  });
+
+  it('lets every room on both levels be walked into, and the check catches a sealed room', () => {
+    expect(unreachableRooms(r.plan)).toEqual([]);
+    // Without the door, the walk starting in the bedroom never gets to the living room or the stair.
+    const sealed: FloorPlan = structuredClone(r.plan);
+    sealed.floors[0].openings = [];
+    const living = sealed.floors[0].rooms.find((x) => x.name === 'Living room')!;
+    expect(unreachableRooms(sealed)).toEqual([living.id, sealed.floors[1].rooms[0].id]);
   });
 });
 
